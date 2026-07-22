@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音生成工具</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --primary-light: #d1fae5;
+            --primary-bg: #ecfdf5;
+            --accent: #06b6d4;
+            --accent-light: #cffafe;
+            --bg: #f0fdf4;
+            --bg-secondary: #f5fbf7;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --white: #ffffff;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+            --shadow-lg: 0 10px 25px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
+            min-height: 100vh;
+            color: var(--text);
+            line-height: 1.5;
+        }
+        
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* 左侧配置区 */
+        .sidebar {
+            width: 420px;
+            background: var(--white);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow-y: auto;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: var(--shadow);
+        }
+        
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        
+        .logo p {
+            font-size: 12px;
+            color: var(--text-light);
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .section-header .icon {
+            font-size: 16px;
+        }
+        
+        .section-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+        
+        textarea::placeholder {
+            color: #9ca3af;
+        }
+        
+        /* 文件命名 */
+        .naming-rule {
+            background: var(--bg);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .naming-rule label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+        
+        .naming-preview {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: var(--primary);
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+        
+        .type-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        
+        .type-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--white);
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .type-btn:hover {
+            border-color: var(--primary);
+        }
+        
+        .type-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+        
+        /* 提取信息 */
+        .extract-info {
+            background: var(--primary-bg);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .extract-label {
+            color: var(--text-light);
+        }
+        
+        .extract-value {
+            color: var(--primary);
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        .extract-value.error {
+            color: var(--danger);
+        }
+        
+        /* 音色选择 */
+        .voice-filter {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--white);
+            border-radius: 16px;
+            font-size: 12px;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+        
+        .voice-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: var(--white);
+        }
+        
+        .voice-item {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .voice-item:last-child {
+            border-bottom: none;
+        }
+        
+        .voice-item:hover {
+            background: var(--primary-bg);
+        }
+        
+        .voice-item.selected {
+            background: var(--primary-light);
+        }
+        
+        .voice-item .avatar {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent-light) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .voice-item .name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }
+        
+        .voice-item input {
+            display: none;
+        }
+        
+        .voice-item .check {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .voice-item.selected .check {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        
+        .voice-item.selected .check::after {
+            content: '✓';
+            color: white;
+            font-size: 10px;
+        }
+        
+        /* 按钮 */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 16px;
+        }
+        
+        .generate-btn {
+            flex: 1;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .generate-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+        
+        .generate-btn:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .download-all-btn {
+            padding: 14px 16px;
+            background: var(--warning);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+        
+        .download-all-btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .download-all-btn:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* 右侧内容区 */
+        .main {
+            flex: 1;
+            padding: 24px 32px;
+            overflow-y: auto;
+        }
+        
+        .main-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .main-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .main-header h2 .count {
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--primary-bg);
+            color: var(--primary);
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+        
+        .clear-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--border);
+            background: var(--white);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .clear-btn:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        
+        /* 音频列表 */
+        .audio-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .audio-item {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .audio-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .audio-item .num {
+            width: 28px;
+            height: 28px;
+            background: var(--primary-bg);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+        
+        .audio-item .content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .audio-item .text {
+            font-size: 14px;
+            color: var(--text);
+            margin-bottom: 3px;
+        }
+        
+        .audio-item .filename {
+            font-size: 11px;
+            color: var(--text-light);
+            font-family: monospace;
+        }
+        
+        .audio-item audio {
+            height: 38px;
+            flex-shrink: 0;
+            border-radius: 6px;
+        }
+        
+        .audio-item .actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        
+        .download-btn {
+            padding: 8px 12px;
+            background: var(--primary-bg);
+            color: var(--primary);
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+        
+        .download-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 40px;
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+        
+        .empty-state .illustration {
+            font-size: 56px;
+            margin-bottom: 16px;
+            opacity: 0.8;
+        }
+        
+        .empty-state h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        
+        .empty-state p {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+        
+        /* 加载 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s;
+        }
+        
+        .loading-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid var(--primary-light);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 14px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+        
+        .loading-progress {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-top: 6px;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--text);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            opacity: 0;
+            transition: transform 0.3s, opacity 0.3s;
+            z-index: 200;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.error {
+            background: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- 左侧配置 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">🎙️</div>
+                <div>
+                    <h1>语音生成</h1>
+                    <p>文字转语音 · 支持下载</p>
+                </div>
+            </div>
+            
+            <!-- 文字输入 -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon">📝</span>
+                    <h2>输入文字</h2>
+                </div>
+                <textarea id="textInput" placeholder="每行一段文字，如：
+H001病区的10床预提醒
+H001病区的10床结束" oninput="updateExtractedInfo()"></textarea>
+            </div>
+            
+            <!-- 文件命名 -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="icon">📋</span>
+                    <h2>文件命名规则</h2>
+                </div>
+                <div class="naming-rule">
+                    <label>命名模板:</label>
+                    <div class="naming-preview" id="namingPreview">等待输入文字...</div>
+                    <label>类型后缀:</label>
+                    <div class="type-buttons">
+                        <button class="type-btn active" data-type="_pre_bed" onclick="selectType(this)">预提醒</button>
+                        <button class="type-btn" data-type="_end_bed" onclick="selectType(this)">结束</button>
+                        <button class="type-btn" data-type="_end_bed_small" onclick="selectType(this)">结束(小)</button>
+                    </div>
+                </div>
+                <div class="extract-info">
+                    <span class="extract-label">自动提取:</span>
+                    <span class="extract-value" id="extractedInfo">等待输入...</span>
+                </div>
+            </div>
+            
+            <!-- 音色选择 -->
+            <div class="section" style="flex: 1;">
+                <div class="section-header">
+                    <span class="icon">🎵</span>
+                    <h2>选择音色</h2>
+                </div>
+                <div class="voice-filter" id="voiceFilter"></div>
+                <div class="voice-list" id="voiceList"></div>
+            </div>
+            
+            <!-- 按钮 -->
+            <div class="btn-row">
+                <button class="generate-btn" id="generateBtn" onclick="generateAll()">
+                    ▶ 开始生成
+                </button>
+                <button class="download-all-btn" id="downloadAllBtn" onclick="downloadAll()" disabled>
+                    ⬇ 批量下载
+                </button>
+            </div>
+        </aside>
+        
+        <!-- 右侧结果 -->
+        <main class="main">
+            <div class="main-header">
+                <h2>
+                    生成结果
+                    <span class="count" id="resultCount">0 条</span>
+                </h2>
+                <button class="clear-btn" onclick="clearResults()">清空列表</button>
+            </div>
+            
+            <div class="audio-list" id="audioList"></div>
+            
+            <div class="empty-state" id="emptyState">
+                <div class="illustration">🎵</div>
+                <h3>暂无生成的音频</h3>
+                <p>填写左侧配置，点击「开始生成」即可</p>
+            </div>
+        </main>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">正在生成...</div>
+        <div class="loading-progress" id="loadingProgress"></div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let voices = [];
+        let currentFilter = '全部';
+        let currentType = '_pre_bed';
+        let extracted = { area: '', bed: '' };
+        let generatedAudios = [];
+        
+        const filters = ['全部', '女声', '男声', '童声', '特色', '粤语'];
+        
+        function getVoiceIcon(name) {
+            if (/女|娘|姐|妹|姨/.test(name)) return '👩';
+            if (/男|叔|爷|哥|弟/.test(name)) return '👨';
+            if (/童|孩|宝/.test(name)) return '👶';
+            if (/机|器/.test(name)) return '🤖';
+            if (/卡|动/.test(name)) return '🎭';
+            if (/鬼|幽/.test(name)) return '👻';
+            if (/萌|可爱/.test(name)) return '🐰';
+            return '🎵';
+        }
+        
+        function matchesFilter(name) {
+            const f = currentFilter;
+            if (f === '全部') return true;
+            if (f === '女声') return /女|娘|姐|妹|奶|姨/.test(name);
+            if (f === '男声') return /男|叔|爷|哥|弟/.test(name);
+            if (f === '童声') return /童|孩|宝/.test(name);
+            if (f === '特色') return /机|卡|鬼|萌/.test(name);
+            if (f === '粤语') return /粤|港/.test(name);
+            return true;
+        }
+        
+        function selectType(btn) {
+            document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentType = btn.dataset.type;
+            updateExtractedInfo();
+        }
+        
+        // 从文字中提取病区和床号
+        function extractAreaBed(text) {
+            // 匹配格式: "H001病区的10床" 或 "母婴病区的10床"
+            // 支持: 字母数字/中文 + 病区 + 的 + 数字 + 床
+            const match = text.match(/([A-Z0-9\u4e00-\u9fa5]+)病区的(\d+)床/);
+            if (match) {
+                return { area: match[1], bed: match[2] };
+            }
+            // 备用匹配: 支持"XX区的YY床"格式
+            const altMatch = text.match(/([A-Z0-9\u4e00-\u9fa5]+)区的(\d+)床/);
+            if (altMatch) {
+                return { area: altMatch[1], bed: altMatch[2] };
+            }
+            return { area: '', bed: '' };
+        }
+        
+        function updateExtractedInfo() {
+            const text = document.getElementById('textInput').value.trim();
+            const preview = document.getElementById('namingPreview');
+            const info = document.getElementById('extractedInfo');
+            
+            if (!text) {
+                preview.textContent = '等待输入文字...';
+                info.textContent = '等待输入...';
+                info.classList.remove('error');
+                extracted = { area: '', bed: '' };
+                return;
+            }
+            
+            // 取第一行文字进行提取
+            const firstLine = text.split('\n')[0].trim();
+            extracted = extractAreaBed(firstLine);
+            
+            if (extracted.area && extracted.bed) {
+                const filename = `${extracted.area}-${extracted.bed}${currentType}.mp3`;
+                preview.textContent = filename;
+                info.textContent = `病区: ${extracted.area} | 床号: ${extracted.bed}`;
+                info.classList.remove('error');
+            } else {
+                preview.textContent = '无法解析';
+                info.textContent = '格式示例: H001病区的10床';
+                info.classList.add('error');
+            }
+        }
+        
+        function generateFilename() {
+            if (extracted.area && extracted.bed) {
+                // 病区名允许中文，床号与类型之间用下划线分隔
+                return `${extracted.area}_${extracted.bed}${currentType}.mp3`;
+            }
+            return `audio${currentType}.mp3`;
+        }
+
+        async function init() {
+            document.getElementById('voiceList').innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;">加载音色中...</div>';
+            
+            document.getElementById('voiceFilter').innerHTML = filters.map(f => 
+                `<button class="filter-btn ${f === '全部' ? 'active' : ''}" onclick="selectFilter('${f}')">${f}</button>`
+            ).join('');
+            
+            try {
+                const res = await fetch('http://localhost:3000/voices');
+                const data = await res.json();
+                let voiceArray = data.system_voice || data.voice_list || data.data || [];
+                
+                voices = voiceArray.map(v => ({
+                    id: v.voice_id,
+                    name: v.voice_name || v.name || v.voice_id
+                }));
+                
+                renderVoices();
+                updateExtractedInfo();
+            } catch (e) {
+                document.getElementById('voiceList').innerHTML = `<div style="padding:16px;text-align:center;color:#ef4444;">加载失败</div>`;
+            }
+        }
+        
+        function selectFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent === filter);
+            });
+            renderVoices();
+        }
+        
+        function renderVoices() {
+            const list = document.getElementById('voiceList');
+            const filtered = voices.filter(v => matchesFilter(v.name));
+            
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;">该分类暂无音色</div>';
+                return;
+            }
+            
+            list.innerHTML = filtered.map((v, i) => `
+                <div class="voice-item ${i === 0 ? 'selected' : ''}" onclick="selectVoice(this, '${v.id}')">
+                    <input type="radio" name="voice" value="${v.id}" ${i === 0 ? 'checked' : ''}>
+                    <div class="avatar">${getVoiceIcon(v.name)}</div>
+                    <div class="name">${v.name}</div>
+                    <div class="check"></div>
+                </div>
+            `).join('');
+        }
+        
+        function selectVoice(el, voiceId) {
+            document.querySelectorAll('.voice-item').forEach(item => item.classList.remove('selected'));
+            el.classList.add('selected');
+            el.querySelector('input').checked = true;
+        }
+
+        const hexToBase64 = (hex) => {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            const bin = String.fromCharCode(...bytes);
+            return `data:audio/mp3;base64,${btoa(bin)}`;
+        };
+
+        async function generateSpeech(text, voiceId) {
+            const res = await fetch('http://localhost:3000/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice_id: voiceId, language: 'Chinese' })
+            });
+            if (!res.ok) throw new Error('API错误');
+            const data = await res.json();
+            if (data.data?.audio) return hexToBase64(data.data.audio);
+            if (data.audio) return hexToBase64(data.audio);
+            throw new Error('无音频数据');
+        }
+        
+        function downloadAudio(url, filename) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+        }
+        
+        async function downloadAll() {
+            const validAudios = generatedAudios.filter(a => !a.error);
+            if (validAudios.length === 0) return;
+            
+            const btn = document.getElementById('downloadAllBtn');
+            btn.disabled = true;
+            btn.textContent = '打包中...';
+            
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder('语音文件');
+                
+                for (let i = 0; i < validAudios.length; i++) {
+                    const audio = validAudios[i];
+                    btn.textContent = `打包中 ${i + 1}/${validAudios.length}...`;
+                    
+                    // 将base64转换为blob
+                    const base64 = audio.url.split(',')[1];
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let j = 0; j < binary.length; j++) {
+                        bytes[j] = binary.charCodeAt(j);
+                    }
+                    folder.file(audio.filename, bytes);
+                }
+                
+                btn.textContent = '生成ZIP...';
+                const content = await zip.generateAsync({ type: 'blob' });
+                
+                // 下载zip
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = `语音文件_${new Date().toISOString().slice(0,10)}.zip`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+                
+                showToast(`已打包 ${validAudios.length} 个文件`);
+            } catch (e) {
+                showToast('打包失败: ' + e.message, 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '⬇ 批量下载';
+        }
+
+        async function generateAll() {
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) { showToast('请输入文字', 'error'); return; }
+            
+            const selected = document.querySelector('input[name="voice"]:checked');
+            if (!selected) { showToast('请选择音色', 'error'); return; }
+            
+            const voiceId = selected.value;
+            const lines = text.split('\n').filter(l => l.trim());
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const progressEl = document.getElementById('loadingProgress');
+            const textEl = document.getElementById('loadingText');
+            const btn = document.getElementById('generateBtn');
+            const downloadAllBtn = document.getElementById('downloadAllBtn');
+            
+            btn.disabled = true;
+            downloadAllBtn.disabled = true;
+            overlay.classList.add('show');
+            
+            generatedAudios = [];
+            const voiceName = voices.find(v => v.id === voiceId)?.name || voiceId;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                textEl.textContent = `正在生成第 ${i + 1} 条...`;
+                progressEl.textContent = `${i + 1}/${lines.length}`;
+                
+                // 逐行提取病区和床号
+                const lineExtracted = extractAreaBed(line);
+                let filename;
+                
+                if (lineExtracted.area && lineExtracted.bed) {
+                    filename = `${lineExtracted.area}_${lineExtracted.bed}${currentType}.mp3`;
+                } else {
+                    // 无法提取时使用通用名称
+                    filename = `audio_${i + 1}${currentType}.mp3`;
+                }
+                
+                try {
+                    const audioUrl = await generateSpeech(line, voiceId);
+                    generatedAudios.push({ text: line, voice: voiceName, url: audioUrl, filename, area: lineExtracted.area, bed: lineExtracted.bed });
+                } catch (e) {
+                    generatedAudios.push({ text: line, voice: voiceName, error: true, filename, area: lineExtracted.area, bed: lineExtracted.bed });
+                }
+            }
+            
+            overlay.classList.remove('show');
+            btn.disabled = false;
+            downloadAllBtn.disabled = generatedAudios.filter(a => !a.error).length === 0;
+            
+            renderResults();
+            showToast(`生成完成！共 ${generatedAudios.filter(a => !a.error).length} 条`);
+        }
+        
+        function renderResults() {
+            const list = document.getElementById('audioList');
+            const empty = document.getElementById('emptyState');
+            const count = document.getElementById('resultCount');
+            const downloadAllBtn = document.getElementById('downloadAllBtn');
+            
+            const validCount = generatedAudios.filter(a => !a.error).length;
+            count.textContent = `${validCount} 条`;
+            downloadAllBtn.disabled = validCount === 0;
+            
+            if (generatedAudios.length === 0) {
+                list.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            
+            empty.style.display = 'none';
+            list.innerHTML = generatedAudios.map((item, i) => `
+                <div class="audio-item">
+                    <div class="num">${i + 1}</div>
+                    <div class="content">
+                        <div class="text">${item.text}</div>
+                        <div class="filename">${item.filename}</div>
+                    </div>
+                    ${item.error ? 
+                        '<span style="color:#ef4444;font-size:12px;">生成失败</span>' : 
+                        `<audio controls src="${item.url}"></audio>
+                         <div class="actions">
+                             <button class="download-btn" onclick="downloadAudio('${item.url}', '${item.filename}')">
+                                 ⬇ 下载
+                             </button>
+                         </div>`
+                    }
+                </div>
+            `).join('');
+        }
+        
+        function clearResults() {
+            generatedAudios = [];
+            renderResults();
+        }
+
+        function showToast(msg, type = '') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast' + (type ? ' ' + type : '') + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>

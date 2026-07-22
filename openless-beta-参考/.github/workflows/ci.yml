@@ -1,0 +1,209 @@
+name: CI
+
+# 多平台跨语言质量门禁。release-tauri.yml 是发版流水线（仅打包构建），这里负责
+# 在合并前快速验证两件事：
+#   1. 前端 typecheck + vite bundle 通过（tsc + vite build，捕获跨 locale 类型 drift）
+#   2. Rust 后端在 macOS / Windows / Linux 都能 cargo check 过（捕获 cfg 漏分支 / 平台 API 误用）
+# 跑 build-mac.sh / windows-package-msvc.ps1 / Tauri bundle 太重；只跑轻量 cargo check + vite build。
+
+on:
+  push:
+    branches: [main, beta]
+  pull_request:
+    branches: [main, beta]
+  workflow_dispatch:
+
+jobs:
+  android-check:
+    name: Android cargo check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openless-all/app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Android SDK + NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "ndk;26.1.10909125"
+          ndk_dir="$ANDROID_HOME/ndk/26.1.10909125"
+          echo "ANDROID_NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
+          set +o pipefail
+          yes | sdkmanager --licenses
+          set -o pipefail
+
+      - name: Configure NDK toolchain for cargo
+        shell: bash
+        run: |
+          set -euo pipefail
+          prebuilt="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "CC_aarch64_linux_android=$prebuilt/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$prebuilt/bin/aarch64-linux-android24-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$prebuilt/bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$prebuilt/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: openless-all/app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Linux check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl file libssl-dev wget
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend (tsc + vite)
+        # generate_context! requires frontendDist (../dist) to exist on Android too.
+        run: npm run build
+
+      - name: Check Android updater pubkey matches tauri.conf.json
+        run: npm run check:android-updater-pubkey
+
+      - name: Check Tauri backend (Android target)
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android
+
+  cross-platform:
+    name: ${{ matrix.label }} checks
+    strategy:
+      # 一个平台挂掉不阻塞其他平台拿到验证结果。
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            preflight: false
+          - os: windows-latest
+            label: Windows
+            preflight: true
+          - os: ubuntu-latest
+            label: Linux
+            preflight: false
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: openless-all/app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # vendor/qwen-asr 是 macOS 上 build.rs 必须的 git submodule。Windows
+          # checkout 也拉一份保持与 release-tauri.yml 一致，开销几秒可以忽略。
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: openless-all/app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux check dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libasound2-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check Windows prerequisites
+        if: matrix.preflight
+        shell: pwsh
+        run: ./scripts/windows-preflight.ps1 -Toolchain msvc
+
+      - name: Check PowerShell scripts
+        if: matrix.preflight
+        shell: pwsh
+        run: |
+          foreach ($script in @("./scripts/windows-preflight.ps1", "./scripts/windows-build-gnu.ps1", "./scripts/windows-runtime-smoke.ps1")) {
+            $errors = $null
+            [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw $script), [ref]$errors) | Out-Null
+            if ($errors) {
+              $errors | Format-List
+              exit 1
+            }
+          }
+
+      - name: Check macOS capsule Spaces contract
+        run: npm run check:macos-capsule-spaces
+
+      - name: Build frontend (tsc + vite)
+        run: npm run build
+
+      - name: Check Tauri backend (cargo check)
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Run Rust backend unit tests
+        if: runner.os != 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Compile Rust backend unit tests (Windows)
+        # Windows runner 能链接 lib test binary，但干净镜像缺少可选 native runtime
+        # DLL entrypoint 时，进程会在 test harness 启动前退出。这里保留 cfg/link
+        # 覆盖；Rust-only 后端单测由下一步实际执行。
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run
+
+      - name: Run Rust-only backend unit tests (Windows)
+        # 只把纯 Rust 后端模块编进独立 test crate，不链接完整 Tauri app lib。
+        # 这样 Windows CI 能实际执行 coordinator/hotkey/recorder/insertion 逻辑单测。
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/backend-tests/Cargo.toml
+
+      - name: Verify version sync across all 5 files
+        # 两个平台都跑这个校验：Windows runner 自带 git-bash，跨 shell 表现一致。
+        # 一旦版本号 drift 立刻 fail，避免发版时再发现漏改。
+        # 校验 5 处：package.json / package-lock.json (root + nested) /
+        # tauri.conf.json / Cargo.toml / Cargo.lock 的 [openless] 包。
+        shell: bash
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          LOCK_ROOT=$(node -p "require('./package-lock.json').version")
+          LOCK_NESTED=$(node -p "require('./package-lock.json').packages[''].version")
+          TAU=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          CRG=$(grep -E '^version = ' src-tauri/Cargo.toml | head -1 | sed -E 's/^version = "(.+)"$/\1/')
+          # Cargo.lock：找 [openless] 包紧跟的 version 行
+          CARGO_LOCK_VER=$(awk 'BEGIN{found=0} /^name = "openless"$/{found=1; next} found && /^version = /{gsub(/"/,""); print $3; exit}' src-tauri/Cargo.lock)
+          echo "package.json         = $PKG"
+          echo "package-lock root    = $LOCK_ROOT"
+          echo "package-lock nested  = $LOCK_NESTED"
+          echo "tauri.conf.json      = $TAU"
+          echo "Cargo.toml           = $CRG"
+          echo "Cargo.lock openless  = $CARGO_LOCK_VER"
+          mismatch=0
+          for v in "$LOCK_ROOT" "$LOCK_NESTED" "$TAU" "$CRG" "$CARGO_LOCK_VER"; do
+            if [ "$v" != "$PKG" ]; then mismatch=1; fi
+          done
+          if [ "$mismatch" -ne 0 ]; then
+            echo "::error::版本号未对齐 — 请用 scripts/bump-version.sh 同步更新"
+            exit 1
+          fi
+          echo "[ok] 全部 5 处版本号一致：$PKG"

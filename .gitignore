@@ -1,0 +1,60 @@
+# ── Secrets ──
+.env
+.env.local
+.env.*.local
+config.yaml
+
+# ── Development-only (not for open source) ──
+dev-docs/
+dev-scripts/
+dev-notes/
+we-media/
+sayit说话波形图效果.html
+backup/
+backups/
+poc-diarization/
+vocotype-cli-master/
+openless-beta-工具/
+*.log
+
+# ── Server dev artifacts ──
+server/.kiro/
+server/.pytest_cache/
+server/.ruff_cache/
+server/docs/
+server/scripts/
+server/benchmarks/
+server/mytestwav.txt
+
+# ── Client dev artifacts ──
+client/scripts/
+client/dist/
+
+# ── Kiro IDE ──
+.kiro/
+
+# ── Node ──
+node_modules/
+
+# ── Rust build output ──
+target/
+
+# ── Python ──
+__pycache__/
+*.pyc
+.venv*/
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+nul
+
+# ── IDE ──
+.vscode/
+.idea/
+
+# ── Tauri dev artifacts ──
+*.blockmap
+
+# ── Logs & runtime ──
+runtime/
