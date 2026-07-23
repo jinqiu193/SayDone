@@ -1,0 +1,39 @@
+=== AUTO mode (NUM_SPEAKERS=-1, threshold=0.5) ===
+读入 16000 Hz 单声道，样本数 909771 (56.86s)
+
+模型配置:
+  segmentation : models\sherpa-onnx-pyannote-segmentation-3-0\model.onnx
+  embedding    : models\eres2net-base.onnx
+  num_speakers : -1 (-1 = auto)
+  threshold    : 0.5
+
+Diarization pipeline 初始化 OK (sample_rate = 16000)
+
+处理耗时: 5.17s (RTF = 0.091x, 即处理速度是实时 11.00 倍)
+检测到说话人数: 7
+总片段数: 10
+
+说话人分布 (标签 → 片段数 → 总时长):
+  Speaker  0:   2 个片段, 总时长   8.62s (15.2%)
+  Speaker  1:   2 个片段, 总时长   5.91s (10.4%)
+  Speaker  2:   1 个片段, 总时长   3.29s (5.8%)
+  Speaker  4:   1 个片段, 总时长   2.70s (4.7%)
+  Speaker  7:   2 个片段, 总时长   3.39s (6.0%)
+  Speaker  8:   1 个片段, 总时长   3.97s (7.0%)
+  Speaker  9:   1 个片段, 总时长   2.43s (4.3%)
+
+时间线 (秒):
+        开始        结束     说话人      时长
+  --------  --------  ------  ------
+      0.32      6.87  Spk 0   6.55s
+      7.02     10.75  Spk 1   3.73s
+     11.46     13.63  Spk 1   2.18s
+     13.75     17.04  Spk 2   3.29s
+     22.14     24.84  Spk 4   2.70s
+     27.64     29.48  Spk 7   1.84s
+     30.00     31.55  Spk 7   1.55s
+     33.97     37.93  Spk 8   3.97s
+     48.04     50.47  Spk 9   2.43s
+     52.53     54.60  Spk 0   2.08s
+
+总说话时长: 30.31s，占音频 53.3%

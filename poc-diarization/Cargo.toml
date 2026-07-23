@@ -1,0 +1,11 @@
+[package]
+name = "poc-diarization"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sherpa-onnx = "1.13"
+hound = "3.5" # WAV reading (used by sherpa's examples)
+
+[profile.release]
+opt-level = 3

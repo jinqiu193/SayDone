@@ -1,0 +1,10 @@
+读入 16000 Hz 单声道，样本数 909771 (56.86s)
+
+模型配置:
+  segmentation : models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx
+  embedding    : models/eres2net-base.onnx
+  num_speakers : -1 (-1 = auto)
+  threshold    : 0.5
+D:\a\sherpa-onnx\sherpa-onnx\sherpa-onnx\csrc\offline-speaker-segmentation-pyannote-model-config.cc:Validate:22 Pyannote segmentation model: 'models/sherpa-onnx-pyannote-segmentation-3-0/model.onnx' does not exist
+D:\a\sherpa-onnx\sherpa-onnx\sherpa-onnx\c-api\c-api.cc:SherpaOnnxCreateOfflineSpeakerDiarization:3178 Errors in config
+初始化 diarization 失败

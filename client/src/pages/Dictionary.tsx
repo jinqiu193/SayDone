@@ -32,7 +32,6 @@ export default function Dictionary() {
   const [genError, setGenError] = useState<string | null>(null)
   const [themeName, setThemeName] = useState<string>('')
   const [themeSaved, setThemeSaved] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
   const [editingThemeId, setEditingThemeId] = useState<string | null>(null)
   const [editingThemeName, setEditingThemeName] = useState('')
   const [editingThemeWords, setEditingThemeWords] = useState('')
@@ -527,7 +526,7 @@ export default function Dictionary() {
             {visibleCustomThemes.length === 0 && !addingNewTheme ? (
               <p className="text-sm text-muted-foreground">暂无热词主题，使用上方 AI 生成或点击「新增主题」创建</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
+              <div className="grid gap-3 grid-cols-1">
                 {visibleCustomThemes.map((theme) => {
                   const active = !!customThemeActive[theme.id]
                   const isAiGenerated = theme.id.startsWith('ai_gen_')
@@ -619,151 +618,6 @@ export default function Dictionary() {
                     </Card>
                   )
                 })}
-              </div>
-            )}
-          </div>
-
-          {/* 高级设置折叠区域 */}
-          <div className="border-t pt-6">
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <Edit3 className="h-4 w-4" />
-              {showAdvanced ? '收起' : '手动添加 / 内置词库'}
-              {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-
-            {showAdvanced && (
-              <div className="space-y-4">
-                {/* 新建热词分类 */}
-                <div className="flex items-center gap-2">
-                  <FolderPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <Input
-                    value={newThemeName}
-                    onChange={(e) => setNewThemeName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void addTheme()
-                      }
-                    }}
-                    placeholder="新建分类，例如：项目A / 医疗术语"
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={() => void addTheme()}
-                    size="sm"
-                    variant="outline"
-                    disabled={!newThemeName.trim()}
-                    className="shrink-0 gap-1.5"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    添加
-                  </Button>
-                </div>
-
-                {/* 内置分类 */}
-                {Object.entries(BUILTIN_SETS).map(([key, setDef]) => {
-                  const active = !!builtinSetActive[key]
-                  const activeWords = getSetWordsInHotwords(key)
-                  const totalWords = (builtinSetWords[key] || []).length
-
-                  if (search && activeWords.length === 0 && !setDef.label.toLowerCase().includes(search.toLowerCase())) {
-                    return null
-                  }
-
-                  return (
-                    <Card key={key} className={cn(!active && 'opacity-60')}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Switch
-                              checked={active}
-                              onChange={() => void toggleBuiltinSet(key)}
-                              size="sm"
-                            />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium">{setDef.label}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {setDef.description} · {activeWords.length} / {totalWords} 词
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 gap-1 px-2 text-xs"
-                            onClick={() => void resetBuiltinSet(key)}
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                          </Button>
-                        </div>
-
-                        {active && activeWords.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {activeWords.map((word) => (
-                              <span
-                                key={word}
-                                className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs text-foreground/90"
-                              >
-                                {word}
-                                <button
-                                  onClick={() => void removeWord(word)}
-                                  className="rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive"
-                                >
-                                  <X className="h-2.5 w-2.5 text-muted-foreground" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-
-                {/* 历史未分类词汇 */}
-                {filteredUnknown.length > 0 && (
-                  <Card>
-                    <CardContent className="p-4">
-                      <button
-                        className="flex w-full items-center justify-between text-left"
-                        onClick={() => setShowUnknown(!showUnknown)}
-                      >
-                        <div>
-                          <p className="text-sm font-medium">历史未分类词汇</p>
-                          <p className="text-xs text-muted-foreground">
-                            来自历史数据，不计入热词分类
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{filteredUnknown.length}</span>
-                          {showUnknown ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                        </div>
-                      </button>
-
-                      {showUnknown && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {filteredUnknown.map((word) => (
-                            <span
-                              key={word}
-                              className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs text-foreground/90"
-                            >
-                              {word}
-                              <button
-                                onClick={() => void removeWord(word)}
-                                className="rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive"
-                              >
-                                <X className="h-2.5 w-2.5 text-muted-foreground" />
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             )}
           </div>
