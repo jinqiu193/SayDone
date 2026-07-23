@@ -1,0 +1,391 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * CSS 变量 fallback（JS 主题系统未加载前的默认值）
+   * 运行时由 src/themes/ 的 applyTheme() 覆盖
+   */
+  :root {
+    /* 基础色 — 与 light.ts 保持一致 */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* 区域色 */
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-border: 240 5.9% 90%;
+    --sidebar-item-active-bg: 240 4.8% 95.9%;
+    --sidebar-item-hover-bg: 240 4.8% 97.9%;
+    --sidebar-text: 240 4% 46%;
+    --sidebar-text-active: 240 10% 3.9%;
+    --titlebar-bg: 0 0% 100%;
+    --titlebar-text: 240 4% 46%;
+    --titlebar-close-hover-bg: 0 84% 60%;
+    --titlebar-close-hover-text: 0 0% 100%;
+
+    /* 表单控件 */
+    --input-bg: 0 0% 100%;
+    --input-border: 240 5.9% 90%;
+    --input-focus-border: 240 5.9% 10%;
+    --input-focus-ring: 240 5.9% 10%;
+    --input-placeholder: 240 4% 65%;
+
+    /* 状态色 */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* ===== 色阶族 ===== */
+    --primary-50: 240 5% 96%;
+    --primary-100: 240 5% 92%;
+    --primary-200: 240 5% 84%;
+    --primary-300: 240 5% 70%;
+    --primary-400: 240 5% 50%;
+    --primary-500: 240 6% 30%;
+    --primary-600: 240 6% 20%;
+    --primary-700: 240 6% 14%;
+    --primary-800: 240 6% 10%;
+    --primary-900: 240 10% 4%;
+    --secondary-50: 240 5% 98%;
+    --secondary-100: 240 5% 96%;
+    --secondary-200: 240 5% 92%;
+    --secondary-300: 240 5% 86%;
+    --secondary-400: 240 5% 76%;
+    --secondary-500: 240 5% 64%;
+    --secondary-600: 240 5% 50%;
+    --secondary-700: 240 5% 36%;
+    --secondary-800: 240 5% 24%;
+    --secondary-900: 240 5% 14%;
+    --destructive-50: 0 86% 97%;
+    --destructive-100: 0 86% 94%;
+    --destructive-200: 0 85% 88%;
+    --destructive-300: 0 84% 78%;
+    --destructive-400: 0 84% 68%;
+    --destructive-500: 0 84% 60%;
+    --destructive-600: 0 73% 52%;
+    --destructive-700: 0 70% 42%;
+    --destructive-800: 0 65% 34%;
+    --destructive-900: 0 60% 26%;
+
+    /* ===== 渐变系统 ===== */
+    --gradient-from: 220 20% 99%;
+    --gradient-via: 220 15% 97%;
+    --gradient-to: 220 25% 96%;
+    --gradient-angle: 135deg;
+    --accent-gradient-from: 217 91% 60%;
+    --accent-gradient-to: 230 85% 65%;
+
+    /* ===== 玻璃系统 ===== */
+    --glass-bg: 240 10% 4% / 0.04;
+    --glass-border: 240 10% 4% / 0.08;
+    --glass-blur: 12px;
+    --glass-shadow: 0 4px 24px hsl(240 10% 4% / 0.06);
+
+    /* ===== 表面层级 ===== */
+    --surface-1: 0 0% 100%;
+    --surface-2: 240 4.8% 97%;
+    --surface-3: 240 4.8% 94%;
+
+    /* ===== 阴影/光晕 ===== */
+    --shadow-soft: 0 2px 8px hsl(240 10% 4% / 0.05);
+    --shadow-elevated: 0 12px 32px hsl(240 10% 4% / 0.10);
+    --highlight-glow: 0 0 0 3px hsl(217 91% 60% / 0.20);
+    --status-success-glow: 142 76% 36% / 0.30;
+    --status-warning-glow: 38 92% 50% / 0.30;
+    --status-info-glow: 199 89% 48% / 0.30;
+    --status-error-glow: 0 84% 60% / 0.30;
+
+    /* Overlay 浮窗变量由主题提供（每个主题必填 --overlay-bg / text / text-muted / text-dim / border / surface / accent）
+       以下是 boot 期间 fallback，避免主题 JS 加载前浮窗透明或白屏 */
+    --overlay-bg: 220 30% 6%;
+    --overlay-text: 210 25% 96%;
+    --overlay-text-muted: 215 15% 65%;
+    --overlay-text-dim: 215 12% 45%;
+    --overlay-border: 210 25% 92% / 0.25;
+    --overlay-surface: 210 25% 92% / 0.06;
+    --overlay-accent: 215 75% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* 全局 focus-visible 指示器 — 键盘用户可见焦点环 */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  /* 已有 ring 样式的组件（如 shadcn Button）不重复添加 outline */
+  [class*="focus-visible:ring"]:focus-visible {
+    outline: none;
+  }
+
+  /* 排版层次：中式 — 衬线、宋体字韵、宽字距、宽行高 */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: theme('fontFamily.serif');
+    font-weight: 500;
+    /* 中文字符方正，紧贴反而拥挤；用宽字距换气韵 */
+    letter-spacing: 0.05em;
+    /* 中文行高比英文大，留白感 */
+    line-height: 1.55;
+  }
+  /* 一级标题：字号大、字距更宽 */
+  h1 {
+    @apply text-3xl;
+    letter-spacing: 0.08em;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  /* 二级标题 */
+  h2 {
+    @apply text-xl;
+    letter-spacing: 0.06em;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  /* 三级及以下：略收 */
+  h3 { @apply text-lg; }
+  h4 { @apply text-base; }
+
+  body {
+    @apply bg-background text-foreground text-base;
+    /* 正文用衬线 — 宋体字韵，长时间阅读不疲劳；控制/数字走 sans（保持对齐） */
+    font-family: theme('fontFamily.serif');
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    overflow: hidden;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  /* 控制类元素强制用 sans — 按钮文字、输入框、表单标签、Tab 文字、徽章 */
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  kbd,
+  code,
+  pre {
+    font-family: theme('fontFamily.sans');
+    letter-spacing: 0;
+    line-height: inherit;
+  }
+
+  /* 段落：宽松行高 */
+  p {
+    line-height: 1.85;
+  }
+
+  /* 数字/时间：等宽对齐 */
+  .tabular-nums,
+  time,
+  [data-time] {
+    font-variant-numeric: tabular-nums;
+    font-family: theme('fontFamily.sans');
+  }
+}
+
+/* 工具类 */
+@layer utilities {
+  /* 主区背景渐变（每主题通过 --gradient-* 变量自定义） */
+  .theme-surface {
+    background-color: hsl(var(--gradient-from));
+    background-image: linear-gradient(
+      var(--gradient-angle),
+      hsl(var(--gradient-from)) 0%,
+      hsl(var(--gradient-via)) 50%,
+      hsl(var(--gradient-to)) 100%
+    );
+    background-attachment: local;
+  }
+
+  /* 玻璃卡片 */
+  .glass-card {
+    background: hsl(var(--glass-bg));
+    border: 1px solid hsl(var(--glass-border));
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* 老 WebView 不支持 backdrop-filter，降级为半透明实色 */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-card {
+      background: hsl(var(--card) / 0.85);
+    }
+  }
+
+  /* grid-template-rows 展开/收起 */
+  .transition-grid {
+    transition: grid-template-rows 200ms ease-out;
+  }
+}
+
+/* 隐藏所有滚动条 */
+@layer utilities {
+  /* Webkit 浏览器（Chrome, Safari, Edge） */
+  ::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+  }
+
+  /* 确保自定义滚动条类也不显示 */
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+  }
+}
+
+/* Overlay waiting dot pulse */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.8); }
+}
+
+/* Overlay waiting pulse animation */
+@keyframes pulse-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* 进度条动画 */
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(250%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* 进度条填充动画 - 从左到右 */
+@keyframes progress-fill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+/* 入场动画 */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 路由切换动画 */
+@keyframes route-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes overlay-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 展开/折叠动画 */
+@keyframes expand {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+
+@keyframes collapse {
+  from { grid-template-rows: 1fr; }
+  to { grid-template-rows: 0fr; }
+}
+
+/* 工具类 */
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 250ms ease-out both;
+  }
+
+  .animate-fade-in-scale {
+    animation: fade-in-scale 200ms ease-out both;
+  }
+
+  .animate-route-fade {
+    animation: route-fade 220ms ease-out both;
+  }
+
+  .animate-overlay-pop-in {
+    animation: overlay-pop-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* 交错入场延迟 */
+  .delay-75 { animation-delay: 75ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-225 { animation-delay: 225ms; }
+  .delay-300 { animation-delay: 300ms; }
+}
+
+/* prefers-reduced-motion：尊重用户系统设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* 玻璃卡片降级：关闭 backdrop-blur */
+  .glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
