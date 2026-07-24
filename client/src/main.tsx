@@ -22,10 +22,6 @@ window.addEventListener('unhandledrejection', (event) => {
   })
 })
 
-// ── 关键：先 render 主窗口，再 fire-and-forget 异步 init ──
-// 之前 await initRuntimeConfig + initProviderFromStore 才 render，主窗口要等几百 ms 才出。
-// 改成 render-first：所有 init 函数都有同步安全默认值（backendBaseUrl 用 builtin / workMode='server'），
-// 即使 init 还没完成，UI 也能正常显示；init 完成后由订阅者（Sidebar 等）自动更新。
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <HashRouter>
     <App />
@@ -38,11 +34,19 @@ void (async () => {
   } catch (e) {
     addRuntimeEvent('warn', 'bootstrap', 'initRuntimeConfig failed', { error: String(e) })
   }
+})()
+
+void (async () => {
+  await new Promise(resolve => setTimeout(resolve, 500))
   try {
     await initProviderFromStore()
   } catch (e) {
     addRuntimeEvent('warn', 'bootstrap', 'initProviderFromStore failed', { error: String(e) })
   }
+})()
+
+void (async () => {
+  await new Promise(resolve => setTimeout(resolve, 1000))
   try {
     await startWebviewKeyboardFallback()
   } catch (e) {
