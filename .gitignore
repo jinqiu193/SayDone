@@ -29,3 +29,9 @@ runtime/
 *.bak
 *~
 nul
+
+# Large model files (ML models, pre-trained weights)
+poc-diarization/cache/
+rag-main/models/
+rag-main/data/
+poc-diarization/models/
