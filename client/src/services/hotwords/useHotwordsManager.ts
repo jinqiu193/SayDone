@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
-import { getSetting, setSetting } from '@/services/store'
+import { getSettingsBatch, setSetting } from '@/services/store'
 import {
   BUILTIN_SETS,
   BUILTIN_SET_ACTIVE_KEY,
@@ -66,19 +66,19 @@ export function useHotwordsManager() {
 
   const loadHotwords = useCallback(async () => {
     try {
-      const [
-        rawSetWords,
-        rawSetActive,
-        rawCustomThemes,
-        rawCustomThemeActive,
-        legacyManualWords,
-      ] = await Promise.all([
-        getSetting<Record<string, unknown>>(BUILTIN_SET_WORDS_KEY, {}),
-        getSetting<Record<string, unknown>>(BUILTIN_SET_ACTIVE_KEY, {}),
-        getSetting<unknown>(CUSTOM_THEMES_KEY, []),
-        getSetting<Record<string, unknown>>(CUSTOM_THEME_ACTIVE_KEY, {}),
-        getSetting<string[]>(LEGACY_MANUAL_WORDS_KEY, []),
-      ])
+      const batch = await getSettingsBatch({
+        [BUILTIN_SET_WORDS_KEY]: {} as Record<string, unknown>,
+        [BUILTIN_SET_ACTIVE_KEY]: {} as Record<string, unknown>,
+        [CUSTOM_THEMES_KEY]: [] as unknown,
+        [CUSTOM_THEME_ACTIVE_KEY]: {} as Record<string, unknown>,
+        [LEGACY_MANUAL_WORDS_KEY]: [] as string[],
+      })
+
+      const rawSetWords = batch[BUILTIN_SET_WORDS_KEY] as Record<string, unknown>
+      const rawSetActive = batch[BUILTIN_SET_ACTIVE_KEY] as Record<string, unknown>
+      const rawCustomThemes = batch[CUSTOM_THEMES_KEY]
+      const rawCustomThemeActive = batch[CUSTOM_THEME_ACTIVE_KEY] as Record<string, unknown>
+      const legacyManualWords = batch[LEGACY_MANUAL_WORDS_KEY] as string[]
 
       // 热词全部从本地 store 加载，不依赖远程服务器
       const savedSetWords = normalizeBuiltinSetWords(rawSetWords)
@@ -148,8 +148,8 @@ export function useHotwordsManager() {
       if (migratedManualWords.length > 0) {
         void setSetting(LEGACY_MANUAL_WORDS_KEY, [])
       }
-    } catch {
-      // backend unreachable
+    } catch (err) {
+      console.error('[热词] 加载失败:', err)
     } finally {
       dispatch({ type: 'set_loading', value: false })
     }

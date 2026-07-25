@@ -401,18 +401,20 @@ export default function History() {
       wouldBeSilent: reprocessPeakNorm < 0.01,
     })
 
-    const preset = await getActivePreset()
-    const aiEnabled = await getSetting('aiEnabled', false)
+    // 并行加载所有初始数据，减少等待时间
+    const [preset, rawAiEnabled, rawSetWords, rawSetActive, rawCustomThemes, rawCustomThemeActive, clientMeta] = await Promise.all([
+      getActivePreset(),
+      getSetting('aiEnabled', false),
+      getSetting(BUILTIN_SET_WORDS_KEY, {}),
+      getSetting(BUILTIN_SET_ACTIVE_KEY, {}),
+      getSetting(CUSTOM_THEMES_KEY, []),
+      getSetting(CUSTOM_THEME_ACTIVE_KEY, {}),
+      bridge.getClientRuntimeInfo().catch(() => null),
+    ])
 
-    // 加载热词
+    // 组合热词
     let hotwords: string[] = []
     try {
-      const [rawSetWords, rawSetActive, rawCustomThemes, rawCustomThemeActive] = await Promise.all([
-        getSetting(BUILTIN_SET_WORDS_KEY, {}),
-        getSetting(BUILTIN_SET_ACTIVE_KEY, {}),
-        getSetting(CUSTOM_THEMES_KEY, []),
-        getSetting(CUSTOM_THEME_ACTIVE_KEY, {}),
-      ])
       const setWords = normalizeBuiltinSetWords(rawSetWords as Record<string, unknown>)
       const setActive = normalizeBuiltinSetActive(rawSetActive as Record<string, unknown>)
       const themes = normalizeCustomThemes(rawCustomThemes)
@@ -420,7 +422,7 @@ export default function History() {
       hotwords = composeHotwords([], setWords, setActive, themes, themeActive)
     } catch { /* ignore */ }
 
-    const clientMeta = await bridge.getClientRuntimeInfo().catch(() => null)
+    const aiEnabled = rawAiEnabled as boolean
 
     // 按用户当前选择的工作模式重新识别，与实时录音保持一致
     // （此前这里硬编码走服务器模式，导致云 API/本地模式下重新识别被错误地发回服务器）

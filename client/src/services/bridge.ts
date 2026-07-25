@@ -127,6 +127,10 @@ export function storeGet(key: string) {
   return invoke<unknown>('store_get', { key })
 }
 
+export function storeBatchGet(keys: string[]) {
+  return invoke<Record<string, unknown>>('store_batch_get', { keys })
+}
+
 export function storeSet(key: string, value: unknown) {
   return invoke('store_set', { key, value })
 }

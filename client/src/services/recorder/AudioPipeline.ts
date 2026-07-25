@@ -120,19 +120,21 @@ export class AudioPipeline {
     })
     this.overlayService.pushListeningBars(bars)
 
-    // ── 音频统计 ──
+    // ── 音频统计（合并为一次数组遍历）──
     let sum = 0
+    let peakAmp = 0
     for (let i = 0; i < pcmFrame.length; i++) {
-      sum += pcmFrame[i] * pcmFrame[i]
+      const sample = pcmFrame[i]
+      sum += sample * sample
+      const amp = sample < 0 ? -sample : sample
+      if (amp > peakAmp) peakAmp = amp
     }
     const rms = Math.sqrt(sum / pcmFrame.length) / 32768
+    const peakNorm = peakAmp / 32768
     this.audioStatsTotalFrames++
     this.audioStatsRmsSum += rms
     if (rms > this.audioStatsPeakRms) this.audioStatsPeakRms = rms
-    for (let j = 0; j < pcmFrame.length; j++) {
-      const amp = Math.abs(pcmFrame[j]) / 32768
-      if (amp > this.audioStatsPeakAmplitude) this.audioStatsPeakAmplitude = amp
-    }
+    if (peakNorm > this.audioStatsPeakAmplitude) this.audioStatsPeakAmplitude = peakNorm
     if (rms < SILENCE_RMS_THRESHOLD) this.audioStatsSilentFrames++
 
     // ── 低音量告警 ──

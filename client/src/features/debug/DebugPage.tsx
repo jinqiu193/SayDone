@@ -44,9 +44,12 @@ export default function DebugPage() {
 
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(refresh, 1000)
+    const id = setInterval(() => {
+      setSessions([...getSessions()])
+      setRuntimeEvents([...getRuntimeEvents()])
+    }, 1000)
     return () => clearInterval(id)
-  }, [autoRefresh, refresh])
+  }, [autoRefresh])
 
   const handleClear = () => {
     clearSessions()

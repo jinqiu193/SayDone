@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Mic, MicOff, MessageSquare, Volume2, Zap } from 'lucide-react'
 import { Page } from '@/components/ui/Page'
-import { getSetting } from '@/services/store'
+import { getSettingsBatch } from '@/services/store'
 import { setStateListener } from '@/services/recorder'
 import type { RecorderState } from '@/services/recorder/types'
 
@@ -17,6 +17,50 @@ interface ShortcutConfig {
   badge?: string
 }
 
+const SHORTCUT_DISPLAY_MAP: Record<string, string> = {
+  'ShiftRight': '右 Shift', 'ShiftLeft': '左 Shift', 'Shift': 'Shift',
+  'AltRight': '右 Alt', 'AltLeft': '左 Alt', 'Alt': 'Alt',
+  'ControlRight': '右 Ctrl', 'ControlLeft': '左 Ctrl', 'Control': 'Ctrl',
+  'MetaRight': '右 Win', 'MetaLeft': '左 Win', 'Meta': 'Win',
+  'Space': '空格', 'MouseMiddleButton': '鼠标中键',
+  'ArrowUp': '↑', 'ArrowDown': '↓', 'ArrowLeft': '←', 'ArrowRight': '→',
+  'Enter': '回车', 'Backspace': '退格', 'Delete': '删除', 'Tab': 'Tab',
+}
+
+function formatShortcutDisplay(shortcut: string): string {
+  const parts = shortcut.split('+')
+  return parts.map(p => SHORTCUT_DISPLAY_MAP[p] || p).join(' + ')
+}
+
+const KEY_TO_CODES_MAP: Record<string, string> = {
+  '左 Alt': 'AltLeft', '右 Alt': 'AltRight', 'Alt': 'Alt',
+  '左 Ctrl': 'ControlLeft', '右 Ctrl': 'ControlRight', 'Ctrl': 'Control',
+  '左 Shift': 'ShiftLeft', '右 Shift': 'ShiftRight', 'Shift': 'Shift',
+  '左 Win': 'MetaLeft', '右 Win': 'MetaRight', 'Win': 'Meta',
+  '空格': 'Space',
+}
+
+function keyToCodes(key: string): string[] {
+  return [KEY_TO_CODES_MAP[key] || key]
+}
+
+function getStatusText(state: RecorderState): string {
+  switch (state) {
+    case 'idle': return '准备就绪'
+    case 'recording': return '正在录音...'
+    case 'processing': return '处理中...'
+    default: return '准备就绪'
+  }
+}
+
+function getStatusColor(state: RecorderState): string {
+  switch (state) {
+    case 'recording': return 'text-cta'
+    case 'processing': return 'text-warning'
+    default: return 'text-muted-foreground'
+  }
+}
+
 export default function Home() {
   const [handsFreeKey, setHandsFreeKey] = useState('Shift')
   const [pttKey, setPttKey] = useState('Alt')
@@ -25,36 +69,21 @@ export default function Home() {
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    void Promise.all([
-      getSetting('shortcutHandsFree', 'Shift').then((v) => {
-        const key = (v as string).split('+').pop() || 'Shift'
-        setHandsFreeKey(key)
-      }),
-      getSetting('shortcutPTT', 'Alt').then((v) => {
-        const key = (v as string).split('+').pop() || 'Alt'
-        setPttKey(key)
-      }),
-      getSetting('shortcutAIChat', 'Control').then((v) => {
-        const key = (v as string).split('+').pop() || 'Ctrl'
-        setAiChatKey(key)
-      }),
-    ])
+    void (async () => {
+      const batch = await getSettingsBatch({
+        shortcutHandsFree: 'Shift',
+        shortcutPTT: 'Alt',
+        shortcutAIChat: 'Control',
+      })
+      setHandsFreeKey(formatShortcutDisplay(String(batch.shortcutHandsFree)))
+      setPttKey(formatShortcutDisplay(String(batch.shortcutPTT)))
+      setAiChatKey(formatShortcutDisplay(String(batch.shortcutAIChat)))
+    })()
   }, [])
 
   useEffect(() => {
     setStateListener((state) => setRecorderState(state))
   }, [])
-
-  const keyToCodes = (key: string): string[] => {
-    const map: Record<string, string> = {
-      '左 Alt': 'AltLeft', '右 Alt': 'AltRight', 'Alt': 'Alt',
-      '左 Ctrl': 'ControlLeft', '右 Ctrl': 'ControlRight', 'Ctrl': 'Control',
-      '左 Shift': 'ShiftLeft', '右 Shift': 'ShiftRight', 'Shift': 'Shift',
-      '左 Win': 'MetaLeft', '右 Win': 'MetaRight', 'Win': 'Meta',
-      '空格': 'Space',
-    }
-    return [map[key] || key]
-  }
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.repeat) return
@@ -102,24 +131,12 @@ export default function Home() {
     }
   }, [handleKeyDown, handleKeyUp])
 
-  const getStatusText = () => {
-    switch (recorderState) {
-      case 'idle': return '准备就绪'
-      case 'recording': return '正在录音...'
-      case 'processing': return '处理中...'
-      default: return '准备就绪'
-    }
-  }
+  const isRecording = recorderState === 'recording'
+  const isProcessing = recorderState === 'processing'
+  const statusText = getStatusText(recorderState)
+  const statusColor = getStatusColor(recorderState)
 
-  const getStatusColor = () => {
-    switch (recorderState) {
-      case 'recording': return 'text-cta'
-      case 'processing': return 'text-warning'
-      default: return 'text-muted-foreground'
-    }
-  }
-
-  const shortcutConfigs: ShortcutConfig[] = [
+  const shortcutConfigs = useMemo<ShortcutConfig[]>(() => [
     {
       id: 'ptt',
       label: '按住说话',
@@ -129,7 +146,7 @@ export default function Home() {
       icon: Volume2,
       activeColor: 'bg-cta/10 text-cta border-cta',
       hint: '录音转文字',
-      badge: recorderState === 'recording' ? '录音中' : undefined,
+      badge: isRecording ? '录音中' : undefined,
     },
     {
       id: 'handsFree',
@@ -137,10 +154,10 @@ export default function Home() {
       desc: '按一次开始，再按结束',
       shortcut: handsFreeKey,
       keyCodes: keyToCodes(handsFreeKey),
-      icon: recorderState === 'recording' ? MicOff : Mic,
+      icon: isRecording ? MicOff : Mic,
       activeColor: 'bg-primary/10 text-primary border-primary',
       hint: '语音转文字',
-      badge: recorderState === 'recording' ? '录音中' : undefined,
+      badge: isRecording ? '录音中' : undefined,
     },
     {
       id: 'aiChat',
@@ -152,14 +169,11 @@ export default function Home() {
       activeColor: 'bg-warning/10 text-warning border-warning',
       hint: 'AI 指令对话',
     },
-  ]
+  ], [pttKey, handsFreeKey, aiChatKey, isRecording])
 
-  const isKeyPressed = (config: ShortcutConfig) => {
+  const isKeyPressed = useCallback((config: ShortcutConfig) => {
     return config.keyCodes.some((code) => pressedKeys.has(code))
-  }
-
-  const isRecording = recorderState === 'recording'
-  const isProcessing = recorderState === 'processing'
+  }, [pressedKeys])
 
   return (
     <Page>
@@ -184,8 +198,8 @@ export default function Home() {
               ) : (
                 <div className="h-2 w-2 rounded-full bg-muted-foreground/50" />
               )}
-              <span className={`text-sm font-medium ${getStatusColor()}`}>
-                {getStatusText()}
+              <span className={`text-sm font-medium ${statusColor}`}>
+                {statusText}
               </span>
             </div>
           </div>

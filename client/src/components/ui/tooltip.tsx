@@ -38,17 +38,6 @@ export function Tooltip({ content, children, className, forceVisible }: TooltipP
   const onLeave = useCallback(() => setHovered(false), [])
   const onDown = useCallback(() => setHovered(false), [])
 
-  // 安全兜底：如果鼠标已经离开但状态没更新，定时检查
-  useLayoutEffect(() => {
-    if (!hovered || !triggerRef.current) return
-    const check = setInterval(() => {
-      if (!triggerRef.current?.matches(':hover')) {
-        setHovered(false)
-      }
-    }, 500)
-    return () => clearInterval(check)
-  }, [hovered])
-
   const tooltip = show
     ? createPortal(
         <div

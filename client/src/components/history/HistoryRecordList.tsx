@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Trash2, ChevronDown, ChevronUp, VolumeX, Star, Play, Pause, RotateCcw, Loader2, Download, Check, Copy, X, FolderOpen } from 'lucide-react'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,7 +47,7 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function HistoryItem({
+const HistoryItem = memo(function HistoryItem({
   record,
   onDelete,
   onToggleFavorite,
@@ -483,7 +483,7 @@ function HistoryItem({
       </div>
     </div>
   )
-}
+})
 
 function DayGroup({
   label,
