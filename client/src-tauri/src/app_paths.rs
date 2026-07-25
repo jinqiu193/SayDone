@@ -1,15 +1,12 @@
 //! 集中式应用路径常量
 //!
 //! 所有 Rust 代码通过这个模块获取应用数据目录、日志目录、音频目录等。
-//! 严禁在任何其他位置硬编码 `"com.sayit.app"` 或 `"com.saydone.app"` 字符串。
+//! 严禁在任何其他位置硬编码 `"com.saydone.app"` 字符串。
 
 use std::path::PathBuf;
 
 /// 应用在 `dirs::data_local_dir()` 下的子目录名（macOS / Linux 对应 `~/Library/Application Support`、
 /// Windows 对应 `%LOCALAPPDATA%`）。
-///
-/// 历史：曾被误用为 `"com.sayit.app"`，导致 `cleanup_expired_audio` 扫描旧目录却无人写入，
-/// 进而「保留 7 天」之类的设置完全失效（音频目录无限增长）。现在统一为 `com.saydone.app`。
 pub const APP_DIR: &str = "com.saydone.app";
 
 /// 应用数据根目录（`data_local_dir/APP_DIR`）。

@@ -1,5 +1,5 @@
 {
-  "name": "sayit-tauri",
+  "name": "saydone",
   "version": "0.0.7",
   "description": "SayDone - Voice to Text Desktop App (Tauri)",
   "type": "module",

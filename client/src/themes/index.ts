@@ -31,7 +31,6 @@ const themes: Record<string, ThemeDefinition> = {
 const LEGACY_ALIAS: Record<string, ThemeId> = {
   light: 'han-shan',
   dark: 'ye-lan',
-  claude: 'chi-tao',
   teal: 'wu-song',
   'teal-dark': 'qing-lin',
 }

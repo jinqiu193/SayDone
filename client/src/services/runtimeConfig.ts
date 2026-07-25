@@ -1,13 +1,10 @@
 import * as bridge from './bridge'
 
-declare const __SAYIT_DEFAULT_SERVER_URL__: string
+declare const __DEFAULT_SERVER_URL__: string
 
 const BUILTIN_DEFAULT_SERVER_URL =
-  typeof __SAYIT_DEFAULT_SERVER_URL__ === 'string' && __SAYIT_DEFAULT_SERVER_URL__.trim()
-    ? __SAYIT_DEFAULT_SERVER_URL__.trim()
-    // 注意：保持使用 saydone.app（Cloudflare 托管），不要写成 saydoneapp.site
-    // 历史 bug：曾写错成 saydoneapp.site，导致主界面 mount 时 DNS 解析失败，
-    // checkVersionUpdate 卡 10s 超时，造成"主界面打开后卡死"的假象。
+  typeof __DEFAULT_SERVER_URL__ === 'string' && __DEFAULT_SERVER_URL__.trim()
+    ? __DEFAULT_SERVER_URL__.trim()
     : 'https://saydone.app'
 
 const BACKEND_BASE_URL_STORE_KEY = 'backendBaseUrl'

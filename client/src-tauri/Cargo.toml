@@ -38,7 +38,7 @@ flate2 = "1"
 tar = "0.4"
 bzip2 = "0.4"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
-sherpa-onnx = { version = "1.12", default-features = false, features = ["static"] }
+sherpa-onnx = { version = "1.12", default-features = false, features = ["shared"] }
 fastembed = "4"
 parking_lot = "0.12"
 pdf-extract = "0.7"
