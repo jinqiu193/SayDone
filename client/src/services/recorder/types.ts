@@ -54,6 +54,8 @@ export interface RecorderContext {
   state: RecorderState
   handsFreeMode: boolean
   isAIChatMode: boolean
+  /** Set when CTRL key is held during PTT — enables template matching mode */
+  isTemplateMode: boolean
   /** Lock to prevent re-entrant startRecording during async setup */
   startRecordingLock: boolean
   /** PTT up arrived while startRecording was still initializing — stop immediately after setup */
@@ -122,6 +124,7 @@ export const INITIAL_CONTEXT: RecorderContext = {
   state: 'idle',
   handsFreeMode: false,
   isAIChatMode: false,
+  isTemplateMode: false,
   startRecordingLock: false,
   pendingStopWhileStarting: false,
   pttSuppressed: false,

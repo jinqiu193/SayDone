@@ -44,6 +44,10 @@ export interface HistoryRecord {
   meetingTitle?: string
   meetingSummary?: string
   meetingSegments?: MeetingSegment[]
+  // 模板生成字段
+  templateId?: string
+  templateName?: string
+  templateScore?: number
 }
 
 export interface MeetingSegment {

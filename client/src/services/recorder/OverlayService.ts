@@ -293,6 +293,32 @@ export class OverlayService {
     }, 4000)
   }
 
+  /** 显示普通信息提示，几秒后自动隐藏 */
+  showInfo(message: string) {
+    devLog('[overlay]', 'state:info', { message })
+    bridge.updateOverlay({
+      state: 'info',
+      infoMessage: message,
+      ...this.getCommonPayload(),
+    })
+    bridge.showOverlay()
+    this.clearFallbackHideTimer()
+    this.fallbackHideId = setTimeout(() => {
+      bridge.hideOverlay()
+      this.clearFallbackHideTimer()
+    }, 3000)
+  }
+
+  /** 显示模板处理状态 */
+  showTemplateProcessing(templateName: string) {
+    devLog('[overlay]', 'state:template', { templateName })
+    bridge.updateOverlay({
+      state: 'thinking',
+      thinkingMessage: `匹配模板: ${templateName}`,
+      ...this.getCommonPayload(),
+    })
+  }
+
   /** 选区操作：在浮窗显示"已选 X 字"提示，让用户知道正在操作选区。
    *  后续 showWaiting / showAIThinking 调用会通过 listeningPreview 或 thinkingMessage
    *  替代这个指示，state 不变。 */

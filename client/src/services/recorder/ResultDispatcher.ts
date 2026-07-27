@@ -22,6 +22,7 @@ import { applyTextReplacements } from '../textReplacement'
 import { stripMarkdown } from '@/lib/stripMarkdown'
 import { getSetting, addHistory } from '../store'
 import { recordSessionStats } from '../personalization/store'
+import { matchTemplate } from '../templates/matcher'
 import type { FinalResult, TranscriptionProvider } from '../transcription'
 import type { ActiveAppContext } from '../../types/appContext'
 import type { PromptResolution, UserStats } from '../personalization/types'
@@ -50,6 +51,8 @@ export interface ResultDispatcherDeps {
   resetToIdleFn: (opts?: { keepOverlay?: boolean }) => void
   /** TextInserter.handleTextInsertion 注入文本（ctx 共享但函数引用按依赖注入） */
   handleTextInsertionFn: (text: string, options?: { allowWhenIdle?: boolean }) => Promise<void>
+  /** 获取模板模式状态（CTRL 键按下时为 true） */
+  getTemplateMode: () => boolean
 }
 
 export class ResultDispatcher {
@@ -249,6 +252,12 @@ export class ResultDispatcher {
       source: options.source,
     })
 
+    const isTemplateMode = this.deps.getTemplateMode()
+    if (isTemplateMode && hasText) {
+      await this.processTemplateResult(textToPaste, context, options)
+      return
+    }
+
     // 保存音频 + 写历史
     try {
       const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -289,6 +298,117 @@ export class ResultDispatcher {
       .finally(() => {
         this.ctx.textInsertionInFlight = false
       })
+  }
+
+  /** 模板模式：匹配模板 + 生成文档 */
+  private async processTemplateResult(
+    userInput: string,
+    context: TimedOutProcessingContext,
+    options: { allowInsertionWhenIdle: boolean; source: 'processing' | 'late_after_timeout' },
+  ): Promise<void> {
+    addRuntimeEvent('info', 'template', '模板模式处理中', { userInput: userInput.slice(0, 50) })
+
+    try {
+      const matchResult = await matchTemplate(userInput)
+      const { template, score } = matchResult
+
+      if (!template) {
+        addRuntimeEvent('info', 'template', '未匹配到模板或相似度低于阈值', {
+          score,
+          userInput: userInput.slice(0, 30),
+        })
+        this.overlayService.showInfo('未匹配到模板，使用普通模式')
+        void this.deps.handleTextInsertionFn(userInput, { allowWhenIdle: options.allowInsertionWhenIdle })
+        return
+      }
+
+      addRuntimeEvent('info', 'template', '匹配到模板', {
+        templateName: template.name,
+        score,
+      })
+
+      this.overlayService.showTemplateProcessing(template.name)
+
+      const generatedText = await this.generateFromTemplate(userInput, template.content)
+
+      const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+      const audioDur = context.audioDurationSec
+      const wallSec = context.wallTimeSec > 0 ? context.wallTimeSec : audioDur
+
+      await addHistory({
+        id: recordId,
+        timestamp: Date.now(),
+        asrText: userInput,
+        llmText: generatedText,
+        asrMs: 0,
+        llmMs: 0,
+        durationSec: wallSec,
+        audioDurationSec: audioDur > 0 ? audioDur : undefined,
+        charCount: generatedText.length,
+        isEmpty: false,
+        audioFilePath: undefined,
+        ...this.buildHistoryMetadata(context.promptResolution),
+        templateId: template.id,
+        templateName: template.name,
+        templateScore: score,
+      })
+      void bridge.emit('history-updated')
+
+      this.ctx.textInsertionInFlight = true
+      void this.deps.handleTextInsertionFn(generatedText, { allowWhenIdle: options.allowInsertionWhenIdle })
+        .finally(() => {
+          this.ctx.textInsertionInFlight = false
+        })
+    } catch (error) {
+      addRuntimeEvent('error', 'template', '模板处理失败', { error: String(error) })
+      this.overlayService.showError('模板处理失败: ' + String(error).slice(0, 50))
+      void this.deps.handleTextInsertionFn(userInput, { allowWhenIdle: options.allowInsertionWhenIdle })
+    }
+  }
+
+  /** 使用模板内容生成文档 */
+  private async generateFromTemplate(userInput: string, templateContent: string): Promise<string> {
+    const aiConfig: { provider: string; api_url: string; api_key: string; model: string } = {
+      provider: await getSetting('cloudAi.provider', 'deepseek') as string,
+      api_url: await getSetting('cloudAi.apiUrl', '') as string,
+      api_key: await getSetting('cloudAi.apiKey', '') as string,
+      model: await getSetting('cloudAi.model', '') as string,
+    }
+
+    if (!aiConfig.api_key) {
+      addRuntimeEvent('warn', 'template', '未配置 AI API，使用模板原文')
+      return templateContent
+    }
+
+    const systemPrompt = `你是一个文档生成助手。用户会提供一个模板和一句话的需求描述。
+
+请根据模板格式和用户的需求，生成完整的文档内容。
+
+要求：
+1. 严格按照模板的格式和结构
+2. 对于模板中的占位符（如 {{xxx}}），根据用户需求填写合理的内容
+3. 如果某些信息用户没有提供，使用合理的默认值或留空提示
+4. 保持文档格式的完整性
+
+模板：
+${templateContent}
+
+用户需求：${userInput}
+
+请直接输出生成的文档内容，不要解释。`
+
+    try {
+      const result = await bridge.aiChat({
+        text: userInput,
+        aiConfig,
+        systemPrompt,
+        mode: 'chat',
+      })
+      return stripMarkdown(result.text || templateContent)
+    } catch (error) {
+      addRuntimeEvent('error', 'template', 'AI 生成失败，使用模板原文', { error: String(error) })
+      return templateContent
+    }
   }
 
   /** onError 入口：保存音频兜底 + 写 isEmpty 历史 + reset */
