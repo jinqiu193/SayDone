@@ -129,6 +129,7 @@ export class RecorderOrchestrator {
         buildProviderMetadata: (r) => this.buildProviderMetadata(r),
         resetToIdleFn: (opts) => this.resetToIdle(opts),
         handleTextInsertionFn: (text, opts) => this.textInserter.handleTextInsertion(text, opts),
+        getTemplateMode: () => this.ctx.isTemplateMode,
       },
     )
   }
@@ -367,6 +368,7 @@ export class RecorderOrchestrator {
     this.ctx.pendingStopWhileStarting = false
     this.ctx.handsFreeMode = false
     this.ctx.isAIChatMode = false
+    this.ctx.isTemplateMode = false
     this.ctx.finalHandledInCurrentRun = false
     this.ctx.textInsertionInFlight = false
     this.ctx.captureReadyPromise = null
@@ -874,6 +876,7 @@ export class RecorderOrchestrator {
     this.ctx.lastPTTUpUsedModifier = Boolean(
       p.altKey || p.ctrlKey || p.shiftKey || _isModifierPTTSetting(p.pttSetting),
     )
+    this.ctx.isTemplateMode = Boolean(p.ctrlKey)
   }
 
   private notePTTUp(payload?: unknown) {
@@ -884,6 +887,7 @@ export class RecorderOrchestrator {
     this.ctx.lastPTTUpUsedModifier = Boolean(
       p.altKey || p.ctrlKey || p.shiftKey || _isModifierPTTSetting(p.pttSetting),
     )
+    this.ctx.isTemplateMode = false
   }
 
   private async waitForModifierPTTReleaseIfNeeded() {

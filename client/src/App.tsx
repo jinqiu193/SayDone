@@ -23,6 +23,7 @@ const About = lazy(() => import('./pages/About'))
 const UpdateDialog = lazy(() => import('./features/update/UpdateDialog'))
 const Meeting = lazy(() => import('./pages/Meeting'))
 const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
+const Templates = lazy(() => import('./features/settings/TemplatesPage'))
 
 function PageFallback() {
   return (
@@ -79,6 +80,7 @@ export default function App() {
               <Route path="/about" element={<Suspense fallback={<PageFallback />}><About /></Suspense>} />
               <Route path="/meeting" element={<Suspense fallback={<PageFallback />}><Meeting /></Suspense>} />
               <Route path="/knowledge" element={<Suspense fallback={<PageFallback />}><KnowledgeBase /></Suspense>} />
+              <Route path="/templates" element={<Suspense fallback={<PageFallback />}><Templates /></Suspense>} />
             </Routes>
           </ErrorBoundary>
         </main>

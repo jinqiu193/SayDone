@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Clock, BookOpen, Settings, Info, AudioLines, Sparkles, Wand2, NotebookPen, Database } from 'lucide-react'
+import { Home, Clock, BookOpen, Settings, Info, AudioLines, Sparkles, Wand2, NotebookPen, Database, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/tooltip'
 import SettingsDialog from '@/features/settings/SettingsDialog'
@@ -11,6 +11,7 @@ const dailyNavItems = [
   { to: '/history', icon: Clock, label: '历史记录' },
   { to: '/meeting', icon: NotebookPen, label: '会议纪要' },
   { to: '/knowledge', icon: Database, label: '知识库' },
+  { to: '/templates', icon: FileText, label: '文档模板' },
 ]
 
 // 一级配置菜单：包含完整的设置入口，AI 供应商下方放「设置」直达 GeneralSettingsPage
@@ -28,7 +29,7 @@ const footerNavItems = [
   { to: '/about', icon: Info, label: '关于本机' },
 ]
 
-function NavItem({
+const NavItem = memo(function NavItem({
   to,
   icon: Icon,
   label,
@@ -42,7 +43,6 @@ function NavItem({
       to={to}
       className={({ isActive }) =>
         cn(
-          // 衬线宋体 + 字距舒展 + 行高宽 + 14px（中文字号）
           'flex items-center gap-3 rounded-lg px-3 py-1.5 text-[14px] font-serif tracking-[0.06em] transition-colors',
           isActive
             ? 'bg-sidebar-item-active font-medium text-primary'
@@ -54,9 +54,9 @@ function NavItem({
       <span className="leading-[1.5]">{label}</span>
     </NavLink>
   )
-}
+})
 
-function IconOnlyNavItem({
+const IconOnlyNavItem = memo(function IconOnlyNavItem({
   to,
   icon: Icon,
   label,
@@ -80,7 +80,7 @@ function IconOnlyNavItem({
       </NavLink>
     </Tooltip>
   )
-}
+})
 
 export default function Sidebar() {
   // 控制「更多设置」弹窗（仅含外观/统计/诊断 3 个页签）的显隐
