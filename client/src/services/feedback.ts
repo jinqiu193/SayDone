@@ -57,9 +57,6 @@ async function collectContext(): Promise<FeedbackPayload['context']> {
   } else if (workMode === 'local') {
     asrProvider = 'local'
     asrModel = await getSetting('localAsr.model', '') as string
-  } else {
-    asrProvider = 'server'
-    asrModel = ''
   }
 
   return {

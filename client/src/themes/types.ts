@@ -172,4 +172,3 @@ export type ThemeId =
   // 旧 id 别名（保留用户设置，向后兼容）
   | 'light'
   | 'dark'
-  | 'claude'

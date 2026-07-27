@@ -2,7 +2,6 @@
 
 import { getSetting } from '../store'
 import { addRuntimeEvent } from '../debugLog'
-import { ServerProvider } from './ServerProvider'
 import { CloudAPIProvider } from './CloudAPIProvider'
 import { LocalProvider } from './LocalProvider'
 import type { TranscriptionProvider, WorkMode } from './types'
@@ -10,7 +9,7 @@ import type { TranscriptionProvider, WorkMode } from './types'
 export type { TranscriptionProvider, TranscriptionCallbacks, StartOptions, StopOptions, FinalResult, ASRResult, WorkMode, ProviderState } from './types'
 
 let currentProvider: TranscriptionProvider | null = null
-let currentMode: WorkMode = 'server'
+let currentMode: WorkMode = 'cloud_api'
 
 // ── workMode 变化订阅器 ──
 // 让 UI（Sidebar 等）能在 init 完成后自动响应 workMode 变化，避免在 render-time
@@ -38,15 +37,13 @@ export function subscribeWorkMode(listener: WorkModeListener): () => void {
 
 function createProvider(mode: WorkMode): TranscriptionProvider {
   switch (mode) {
-    case 'server':
-      return new ServerProvider()
     case 'cloud_api':
       return new CloudAPIProvider()
     case 'local':
       return new LocalProvider()
     default:
-      addRuntimeEvent('warn', 'transcription', `未知工作模式 "${mode}"，回退到服务器模式`)
-      return new ServerProvider()
+      addRuntimeEvent('warn', 'transcription', `未知工作模式 "${mode}"，回退到云 API 模式`)
+      return new CloudAPIProvider()
   }
 }
 
@@ -92,9 +89,19 @@ export async function switchProvider(mode: WorkMode): Promise<TranscriptionProvi
 
 /** 从 store 读取保存的 workMode 并初始化 */
 export async function initProviderFromStore(): Promise<void> {
-  const stored = await getSetting('workMode', 'server')
-  const mode = (stored === 'server' || stored === 'cloud_api' || stored === 'local') ? stored : 'server'
-  currentMode = mode as WorkMode
+  const stored = await getSetting('workMode', 'cloud_api')
+  // 兼容旧版本：已移除的 'server' 模式自动迁移到 'cloud_api'
+  let mode: WorkMode
+  if (stored === 'cloud_api' || stored === 'local') {
+    mode = stored
+  } else {
+    if (stored === 'server') {
+      addRuntimeEvent('info', 'transcription', '检测到旧版本的服务器模式，自动迁移到云 API 模式')
+      await import('../store').then(({ setSetting }) => setSetting('workMode', 'cloud_api'))
+    }
+    mode = 'cloud_api'
+  }
+  currentMode = mode
   currentProvider = createProvider(currentMode)
   emitWorkModeChange(currentMode)
   addRuntimeEvent('info', 'transcription', 'Provider 已初始化', { mode: currentMode })

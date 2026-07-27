@@ -1,10 +1,10 @@
 // 转写 Provider 抽象层类型定义
-// 所有工作模式（服务器 / 云 API / 本地）共享此接口
+// 所有工作模式（云 API / 本地）共享此接口
 
 import type { ActiveAppContext } from '../../types/appContext'
 import type { ClientRuntimeInfo } from '../../types/appApi'
 
-export type WorkMode = 'server' | 'cloud_api' | 'local'
+export type WorkMode = 'cloud_api' | 'local'
 
 export type ProviderState = 'disconnected' | 'connecting' | 'connected' | 'error'
 

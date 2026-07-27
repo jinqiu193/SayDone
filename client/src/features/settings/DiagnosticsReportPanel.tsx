@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { AlertCircle, CheckCircle2, Download, FileArchive, Image as ImageIcon, RefreshCw, Send } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Download, FileArchive, Image as ImageIcon, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -7,11 +7,9 @@ import {
   getDiagnosticsPreview,
   MAX_DIAGNOSTIC_IMAGES,
   MAX_DIAGNOSTIC_IMAGE_SIZE,
-  submitDiagnostics,
   downloadDiagnostics,
   validateDiagnosticImages,
 } from '@/services/diagnostics'
-import { getWorkMode } from '@/services/transcription'
 import { save } from '@tauri-apps/plugin-dialog'
 import * as bridge from '@/services/bridge'
 import type { DiagnosticOccurrence, DiagnosticsPreview } from '@/types/appApi'
@@ -39,15 +37,12 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
   const [description, setDescription] = useState('')
   const [issueOccurrence, setIssueOccurrence] = useState<DiagnosticOccurrence>('within_1h')
   const [images, setImages] = useState<File[]>([])
-  const [submitting, setSubmitting] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'success' | 'download_success' | 'error'>('idle')
-  const [ticketId, setTicketId] = useState('')
+  const [status, setStatus] = useState<'idle' | 'download_success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [preview, setPreview] = useState<DiagnosticsPreview | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
 
-  const isServerMode = getWorkMode() === 'server'
   const imageValidation = useMemo(() => validateDiagnosticImages(images), [images])
 
   useEffect(() => {
@@ -99,37 +94,6 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
     }
   }
 
-  const handleSubmit = async () => {
-    if (!description.trim()) {
-      setErrorMessage('请先描述问题现象和影响。')
-      return
-    }
-    if (!imageValidation.valid) {
-      setErrorMessage(imageValidation.errors[0] || '截图校验失败。')
-      return
-    }
-
-    setSubmitting(true)
-    setStatus('idle')
-    setErrorMessage('')
-    try {
-      const ticket = await submitDiagnostics({
-        description: description.trim(),
-        issueOccurrence,
-        images,
-      })
-      setTicketId(ticket)
-      setStatus('success')
-      setDescription('')
-      setImages([])
-    } catch (error) {
-      setStatus('error')
-      setErrorMessage(String(error))
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const handleDownload = async () => {
     if (!description.trim()) {
       setErrorMessage('请先描述问题现象和影响。')
@@ -174,7 +138,7 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
   }
 
   const containerClassName = embedded ? '' : 'mx-auto max-w-4xl p-8'
-  const busy = submitting || downloading
+  const busy = downloading
   const missingDescription = !description.trim()
   const downloadBtn = (
     <Button variant="outline" size="sm" disabled={busy || missingDescription} onClick={handleDownload}>
@@ -182,12 +146,6 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
       {downloading ? '正在打包...' : '下载诊断包'}
     </Button>
   )
-  const sendBtn = isServerMode ? (
-    <Button size="sm" disabled={busy || missingDescription} onClick={handleSubmit}>
-      <Send className="mr-2 h-4 w-4" />
-      {submitting ? '正在发送...' : '发送诊断'}
-    </Button>
-  ) : null
 
   return (
     <div className={containerClassName}>
@@ -314,16 +272,6 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
               </div>
             )}
 
-            {status === 'success' && (
-              <div className="flex items-start gap-2 rounded-md bg-success/10 p-3 text-sm">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                <div>
-                  <div className="font-medium text-success">诊断包已发送</div>
-                  <div className="mt-1 text-xs text-success/80">工单号：{ticketId}</div>
-                </div>
-              </div>
-            )}
-
             {status === 'download_success' && (
               <div className="flex items-start gap-2 rounded-md bg-success/10 p-3 text-sm">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
@@ -349,7 +297,6 @@ export default function DiagnosticsReportPanel({ embedded = false }: Diagnostics
                 清空
               </Button>
               {missingDescription ? <Tooltip content="请先填写问题描述">{downloadBtn}</Tooltip> : downloadBtn}
-              {sendBtn && (missingDescription ? <Tooltip content="请先填写问题描述">{sendBtn}</Tooltip> : sendBtn)}
             </div>
           </div>
         </CardContent>

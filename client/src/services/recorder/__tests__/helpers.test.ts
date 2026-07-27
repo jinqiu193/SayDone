@@ -60,12 +60,6 @@ describe('isModifierPTTSetting', () => {
 })
 
 describe('computeProcessingTimeoutMs', () => {
-  it('server 模式基础超时', () => {
-    const ms = computeProcessingTimeoutMs(5, 'server')
-    expect(ms).toBeGreaterThanOrEqual(15000)
-    expect(ms).toBeLessThan(20000)
-  })
-
   it('cloud_api 模式至少 30s', () => {
     const ms = computeProcessingTimeoutMs(1, 'cloud_api')
     expect(ms).toBeGreaterThanOrEqual(30000)
@@ -82,8 +76,8 @@ describe('computeProcessingTimeoutMs', () => {
   })
 
   it('长音频超时更长', () => {
-    const short = computeProcessingTimeoutMs(5, 'server')
-    const long = computeProcessingTimeoutMs(60, 'server')
+    const short = computeProcessingTimeoutMs(5, 'cloud_api')
+    const long = computeProcessingTimeoutMs(60, 'cloud_api')
     expect(long).toBeGreaterThan(short)
   })
 

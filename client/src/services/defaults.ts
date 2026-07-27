@@ -12,7 +12,7 @@
 export const DEFAULTS: Record<string, unknown> = {
 
   // ── 工作模式 ──
-  workMode: 'server', // 可选: 'server' | 'cloud_api' | 'local'
+  workMode: 'cloud_api', // 可选: 'cloud_api' | 'local'
 
   // ── 快捷键 ──
   shortcutPTT: 'ShiftRight', // 按住说话。可选: 'AltLeft' | 'AltRight' | 'ControlLeft' | 'ControlRight' | 'ShiftLeft' | 'ShiftRight' | 'Space' | 'CapsLock' 等单键
@@ -45,9 +45,6 @@ export const DEFAULTS: Record<string, unknown> = {
   'localAsr.language': 'auto', // 可选: 'auto' | 'zh' | 'en' | 'ja' | 'ko'
   'localAsr.downloadSource': 'modelscope', // 可选: 'modelscope' | 'huggingface'
   'localAsr.model': '',
-
-  // ── 服务器 ──
-  'server.language': 'auto', // 可选: 'auto' | 'Chinese' | 'English' | 'Cantonese'
 
   // ── 悬浮窗 ──
   overlayShowDuration: true, // 是否显示录音时长。可选: true | false

@@ -237,8 +237,6 @@ export function computeProcessingTimeoutMs(
     const cloudTimeout = 30000 + Math.ceil(safeAudioSec * 500)
     // 上限从 90000 → 180000，覆盖更长录音 + 远端 LLM 校对耗时
     timeout = Math.min(Math.max(timeout, cloudTimeout), 180_000)
-  } else if (providerMode === 'server') {
-    // server 模式：自管 WebSocket 流，不在本机累计推理时间，base + extra 已足够
   } else {
     // 未知 provider mode：兜底给 30s
     timeout = Math.max(timeout, 30_000)

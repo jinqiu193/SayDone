@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom/client'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import Overlay from './Overlay'
-import { applyTheme, getCurrentThemeId } from '../themes'
+import { applyTheme } from '../themes'
 import * as bridge from '../services/bridge'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import '../index.css'
@@ -24,8 +24,23 @@ void listen<number>('overlay-ping', (event) => {
 })
 
 // 浮窗独立 WebViewWindow，需要自己注入主题 CSS 变量。
-// 启动时同步主窗口当前主题；之后订阅 theme-changed 事件实时跟随。
-applyTheme(getCurrentThemeId())
+// 启动时从持久化存储读取主题设置；之后订阅 theme-changed 事件实时跟随。
+const THEME_SETTING_KEY = 'theme'
+const DEFAULT_THEME = 'qing-ci'
+
+async function initOverlayTheme() {
+  try {
+    const savedTheme = await bridge.storeGet(THEME_SETTING_KEY)
+    const themeId = typeof savedTheme === 'string' ? savedTheme : DEFAULT_THEME
+    applyTheme(themeId)
+  } catch (error) {
+    console.warn('[overlay] Failed to load theme from store, using default:', error)
+    applyTheme(DEFAULT_THEME)
+  }
+}
+
+void initOverlayTheme()
+
 bridge.onThemeChanged((themeId) => {
   applyTheme(themeId)
 })

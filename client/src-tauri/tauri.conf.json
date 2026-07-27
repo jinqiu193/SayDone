@@ -45,7 +45,7 @@
     ],
     "shortDescription": "语音输入，AI 润色",
     "longDescription": "SayDone - 按住说话，松开输入。支持语音识别和 AI 文本润色，让语音输入更高效。",
-    "copyright": "© 2026 Liu Qianglong & Claude",
+    "copyright": "© 2026 Liu Qianglong",
     "category": "Productivity",
     "windows": {
       "nsis": {

@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Clock, BookOpen, Settings, Info, Wifi, WifiOff, AudioLines, Sparkles, Wand2, NotebookPen, Database } from 'lucide-react'
+import { Home, Clock, BookOpen, Settings, Info, AudioLines, Sparkles, Wand2, NotebookPen, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/tooltip'
-import { useConnectionStatus } from '@/hooks/useConnectionStatus'
-import { getWorkMode, subscribeWorkMode, type WorkMode } from '@/services/transcription'
 import SettingsDialog from '@/features/settings/SettingsDialog'
 import Seal from '@/components/Seal'
 
@@ -24,8 +22,8 @@ const configNavItems = [
   { to: '/settings', icon: Settings, label: '通用设置' },
 ]
 
-// 底部仅保留「关于」+ 连接指示器；底部"设置"图标已上移到 configNavItems，
-// 这里新增「更多」图标用于弹出 SettingsDialog（仅剩 外观/统计/诊断 3 个页签）
+// 底部仅保留「关于」+「更多设置」；底部"设置"图标已上移到 configNavItems，
+// 「更多」图标用于弹出 SettingsDialog（仅剩 外观/统计/诊断 3 个页签）
 const footerNavItems = [
   { to: '/about', icon: Info, label: '关于本机' },
 ]
@@ -84,33 +82,6 @@ function IconOnlyNavItem({
   )
 }
 
-const statusConfig = {
-  connected:    { icon: Wifi,    color: 'text-success', label: '后端已连接' },
-  connecting:   { icon: Wifi,    color: 'text-warning animate-pulse', label: '正在连接…' },
-  disconnected: { icon: WifiOff, color: 'text-muted-foreground', label: '后端未连接' },
-  error:        { icon: WifiOff, color: 'text-destructive', label: '连接失败' },
-} as const
-
-function ConnectionIndicator() {
-  const status = useConnectionStatus()
-  // 用 useState + 订阅，让 init 完成后 workMode 变化能触发 re-render
-  // （否则 render-time 直接读 getWorkMode() 不会响应模块变量的后续变更）
-  const [workMode, setWorkMode] = useState<WorkMode>(getWorkMode)
-  useEffect(() => subscribeWorkMode(setWorkMode), [])
-
-  // 非服务器模式不显示连接指示器
-  if (workMode !== 'server') return null
-
-  const { icon: StatusIcon, color, label } = statusConfig[status]
-  return (
-    <Tooltip content={label}>
-      <div className="flex items-center justify-center rounded-lg p-2">
-        <StatusIcon className={cn('h-4 w-4', color)} />
-      </div>
-    </Tooltip>
-  )
-}
-
 export default function Sidebar() {
   // 控制「更多设置」弹窗（仅含外观/统计/诊断 3 个页签）的显隐
   const [moreOpen, setMoreOpen] = useState(false)
@@ -157,7 +128,6 @@ export default function Sidebar() {
               <Settings className="h-4 w-4" />
             </button>
           </Tooltip>
-          <ConnectionIndicator />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 """
 印章图标生成器 — 用 PIL 画"印章"风格应用图标
-- 512×512 朱红底
+- 512×512 青瓷绿底
 - 圆角矩形 4% inset
 - 双层回字纹边框
 - 中央汉字"说"
@@ -12,10 +12,10 @@ import os
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-# 朱砂红（R19 G40 B49 较深，传统印章色）
-SEAL_RED = (193, 41, 46)
-EDGE_DARK = (148, 28, 32)
-WHITE = (255, 245, 235)  # 米白——印章阴刻的"露白"色
+# 青瓷绿（温润淡雅的传统瓷器色）
+SEAL_GREEN = (64, 120, 98)
+EDGE_DARK = (42, 85, 68)
+WHITE = (245, 250, 248)  # 浅米白——青瓷阴刻的"露白"色
 
 # 中央字符
 CHARACTER = "说"
@@ -42,7 +42,7 @@ def hex_corner(draw, x, y, w, h, color):
 
 def draw_seal(canvas_size: int) -> Image.Image:
     size = canvas_size
-    img = Image.new("RGBA", (size, size), SEAL_RED + (255,))
+    img = Image.new("RGBA", (size, size), SEAL_GREEN + (255,))
     draw = ImageDraw.Draw(img)
 
     px = lambda ratio: int(size * ratio)

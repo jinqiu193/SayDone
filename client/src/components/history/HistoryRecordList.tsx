@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Trash2, ChevronDown, ChevronUp, VolumeX, Star, Play, Pause, RotateCcw, Loader2, Download, Check, Copy, X, FolderOpen } from 'lucide-react'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,7 +47,7 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function HistoryItem({
+const HistoryItem = memo(function HistoryItem({
   record,
   onDelete,
   onToggleFavorite,
@@ -289,7 +289,7 @@ function HistoryItem({
                 {record.workMode && (
                   <>
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">
-                      {record.workMode === 'server' ? '服务器' : record.workMode === 'cloud_api' ? '云 API' : '本地'}
+                      {(record.workMode as string) === 'server' ? '服务器' : record.workMode === 'cloud_api' ? '云 API' : '本地'}
                     </span>
                     {record.asrProvider && (
                       <span className="text-xs">ASR: {ASR_PROVIDER_DISPLAY[record.asrProvider] || record.asrProvider}</span>
@@ -483,9 +483,9 @@ function HistoryItem({
       </div>
     </div>
   )
-}
+})
 
-function DayGroup({
+const DayGroup = memo(function DayGroup({
   label,
   records,
   onDelete,
@@ -516,7 +516,7 @@ function DayGroup({
       </CardContent>
     </Card>
   )
-}
+})
 
 export default function HistoryRecordList({
   records,

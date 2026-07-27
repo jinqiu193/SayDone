@@ -124,45 +124,6 @@ export default function AsrTestSection({ workMode }: { workMode: WorkMode }) {
           ? (qwenOmniModel || asrProvider)
           : (ASR_MODEL_ID_MAP[asrProvider] || asrProvider)
         setResult({ text: r.text, asrMs: totalMs, llmMs: 0, mode: '云 API', model: modelDisplay, audioDurationSec })
-      } else {
-        // 服务器模式
-        const { getWSUrl } = await import('@/services/runtimeConfig')
-        const wsUrl = getWSUrl()
-        const start = performance.now()
-
-        const r = await new Promise<{ text: string; asrMs: number }>((resolve, reject) => {
-          const timeout = setTimeout(() => { try { sock.close() } catch {} reject(new Error('超时')) }, 30000)
-          const sock = new WebSocket(wsUrl)
-          sock.binaryType = 'arraybuffer'
-          sock.onopen = () => {
-            sock.send(JSON.stringify({ cmd: 'start', disable_ai: true }))
-            // 分块发送 PCM（每块 3200 字节 = 100ms @16kHz 16bit mono）
-            const chunkSize = 3200
-            for (let i = 0; i < pcmBytes.length; i += chunkSize) {
-              sock.send(pcmBytes.slice(i, i + chunkSize).buffer)
-            }
-            sock.send(JSON.stringify({ cmd: 'stop' }))
-          }
-          sock.onmessage = (e) => {
-            if (typeof e.data !== 'string') return
-            try {
-              const msg = JSON.parse(e.data)
-              if (msg.type === 'final') {
-                clearTimeout(timeout)
-                resolve({ text: msg.asr_text || '', asrMs: msg.asr_ms || 0 })
-                sock.close()
-              } else if (msg.type === 'error') {
-                clearTimeout(timeout)
-                reject(new Error(msg.message || '服务器错误'))
-                sock.close()
-              }
-            } catch {}
-          }
-          sock.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket 连接失败')) }
-        })
-
-        const totalMs = Math.round(performance.now() - start)
-        setResult({ text: r.text, asrMs: r.asrMs, llmMs: 0, mode: '服务器', model: '服务端 ASR', audioDurationSec })
       }
     } catch (err) {
       setResult({ text: `测试失败: ${String(err)}`, asrMs: 0, llmMs: 0, mode: workMode, model: '-', audioDurationSec: 0 })

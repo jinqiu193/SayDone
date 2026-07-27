@@ -6,7 +6,7 @@ import { applyTheme, getCurrentThemeId } from '@/themes'
 import { getSetting, setSetting } from '@/services/store'
 
 const THEME_SETTING_KEY = 'theme'
-const DEFAULT_THEME = 'ye-lan'
+const DEFAULT_THEME = 'qing-ci'
 
 /** 初始化主题：从 settings 读取并应用 */
 export async function initTheme(): Promise<string> {

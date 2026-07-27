@@ -7,16 +7,15 @@ import { refreshRecorderSettings, reconnectProvider } from '@/services/recorder'
 import WorkModeSection from './WorkModeSection'
 import CloudAPISection from './CloudAPISection'
 import LocalModeSection from './LocalModeSection'
-import ServerSection from './ServerSection'
 import AsrTestSection from './AsrTestSection'
 
 export default function VoiceEnginePage() {
   const [workMode, setWorkMode] = useState<WorkMode>(getWorkMode)
 
   useEffect(() => {
-    getSetting('workMode', 'server').then((value) => {
+    getSetting('workMode', 'cloud_api').then((value) => {
       const v = value as WorkMode
-      if (v === 'server' || v === 'cloud_api' || v === 'local') setWorkMode(v)
+      if (v === 'cloud_api' || v === 'local') setWorkMode(v)
     })
   }, [])
 
@@ -39,7 +38,6 @@ export default function VoiceEnginePage() {
         <WorkModeSection value={workMode} onChange={(m) => void handleWorkModeChange(m)} />
 
         {workMode === 'local' && <LocalModeSection />}
-        {workMode === 'server' && <ServerSection />}
         {workMode === 'cloud_api' && <CloudAPISection />}
 
         <AsrTestSection workMode={workMode} />

@@ -362,9 +362,12 @@ impl Storage {
             |row| Ok((row.get(0)?, row.get(1)?)),
         ).ok();
 
-        let (_list_order, raw_json) = match row {
+        let (list_order, raw_json) = match row {
             Some(r) => r,
-            None => return Ok(()),
+            None => {
+                log::warn!("history_update: record not found, id={}", id);
+                return Ok(());
+            }
         };
 
         let mut prev: serde_json::Map<String, Value> = serde_json::from_str(&raw_json).unwrap_or_default();

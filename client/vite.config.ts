@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 
 const host = process.env.TAURI_DEV_HOST
-const defaultServerUrl = process.env.SAYIT_DEFAULT_SERVER_URL || 'https://sayitapp.site'
+const defaultServerUrl = process.env.DEFAULT_SERVER_URL || 'https://saydone.app'
 
 // 从 tauri.conf.json 读取版本号
 const tauriConf = JSON.parse(

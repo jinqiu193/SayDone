@@ -17,6 +17,7 @@ import {
   getActivePresetId,
   getPromptPresets,
   getSetting,
+  getSettingsBatch,
   type PromptPreset,
 } from '../store'
 import { addRuntimeEvent } from '../debugLog'
@@ -60,43 +61,52 @@ export class SettingsCache {
    * 注意：被 RecorderOrchestrator.refreshRuntimeSettings() 调用；
    * 设置面板保存设置后通过 services/recorder.refreshRecorderSettings() 触发。 */
   async refresh(): Promise<void> {
-    const [
-      micId,
-      presets,
-      activePresetId,
-      activeChatPresetId,
-      aiEnabled,
-      appPromptRules,
-      userStats,
-      enablePreviewPartial,
-    ] = await Promise.all([
-      getSetting('selectedMic', ''),
-      getPromptPresets(),
-      getActivePresetId(),
-      getActiveChatPresetId(),
-      getSetting('aiEnabled', false),
+    const [settingsBatch, appPromptRules, userStats] = await Promise.all([
+      getSettingsBatch({
+        selectedMic: '',
+        aiEnabled: false,
+        enablePreviewPartial: true,
+        activePresetId: 'intent',
+        activeChatPresetId: 'chat_writer',
+        serverLanguage: 'auto',
+        scrollUpToSend: false,
+        scrollDownToDelete: false,
+        scrollUpSensitivity: 1,
+        scrollDownSensitivity: 1,
+        promptPresets: [] as unknown,
+        [BUILTIN_SET_WORDS_KEY]: {} as Record<string, unknown>,
+        [BUILTIN_SET_ACTIVE_KEY]: {} as Record<string, unknown>,
+        [CUSTOM_THEMES_KEY]: [] as unknown[],
+        [CUSTOM_THEME_ACTIVE_KEY]: {} as Record<string, unknown>,
+      }),
       this.getAppPromptRules(),
       this.getUserStats(),
-      getSetting('enablePreviewPartial', true),
     ])
 
-    this.cachedMicId = String(micId || '')
-    this.cachedPresets = presets
-    this.cachedActivePresetId = activePresetId
-    this.cachedActiveChatPresetId = activeChatPresetId
-    this.cachedAiEnabled = Boolean(aiEnabled)
+    this.cachedMicId = String(settingsBatch.selectedMic || '')
+    this.cachedAiEnabled = Boolean(settingsBatch.aiEnabled)
     this.cachedAppPromptRules = appPromptRules
     this.cachedUserStats = userStats
 
-    // previewEnabled 也存在这里：让 PreviewEngine 通过 getPreviewEnabled() 读取
-    this.cachedPreviewEnabled = enablePreviewPartial !== false
+    this.cachedPreviewEnabled = settingsBatch.enablePreviewPartial !== false
+    this.cachedActivePresetId = String(settingsBatch.activePresetId || 'intent')
+    this.cachedActiveChatPresetId = String(settingsBatch.activeChatPresetId || 'chat_writer')
+    this.cachedLanguage = settingsBatch.serverLanguage && settingsBatch.serverLanguage !== 'auto'
+      ? String(settingsBatch.serverLanguage)
+      : ''
+
+    this.cachedScrollUp = Boolean(settingsBatch.scrollUpToSend)
+    this.cachedScrollDown = Boolean(settingsBatch.scrollDownToDelete)
+    this.cachedScrollUpThreshold = Number(settingsBatch.scrollUpSensitivity) || 1
+    this.cachedScrollDownThreshold = Number(settingsBatch.scrollDownSensitivity) || 1
+
+    const setWords = normalizeBuiltinSetWords(settingsBatch[BUILTIN_SET_WORDS_KEY] as Record<string, unknown>)
+    const setActive = normalizeBuiltinSetActive(settingsBatch[BUILTIN_SET_ACTIVE_KEY] as Record<string, unknown>)
+    const themes = normalizeCustomThemes(settingsBatch[CUSTOM_THEMES_KEY])
+    const themeActive = normalizeCustomThemeActive(settingsBatch[CUSTOM_THEME_ACTIVE_KEY] as Record<string, unknown>, themes)
+    this.cachedHotwords = composeHotwords([], setWords, setActive, themes, themeActive)
 
     await this.overlayService.refreshSettings()
-
-    // 热词 / 语言 / 鼠标设置 — 各自独立 try/catch，单项失败不影响其他
-    await this.loadHotwords()
-    await this.loadLanguage()
-    await this.loadMouseSettings()
 
     try {
       this.cachedClientRuntimeInfo = await bridge.getClientRuntimeInfo()
@@ -116,52 +126,6 @@ export class SettingsCache {
   /** 预览开关：被 PreviewEngine 调用；true 时启用流式预览 */
   isPreviewEnabled(): boolean {
     return this.cachedPreviewEnabled
-  }
-
-  // ─── 私有加载方法 ───
-
-  private async loadHotwords(): Promise<void> {
-    try {
-      const [rawSetWords, rawSetActive, rawCustomThemes, rawCustomThemeActive] = await Promise.all([
-        getSetting(BUILTIN_SET_WORDS_KEY, {}),
-        getSetting(BUILTIN_SET_ACTIVE_KEY, {}),
-        getSetting(CUSTOM_THEMES_KEY, []),
-        getSetting(CUSTOM_THEME_ACTIVE_KEY, {}),
-      ])
-      const setWords = normalizeBuiltinSetWords(rawSetWords as Record<string, unknown>)
-      const setActive = normalizeBuiltinSetActive(rawSetActive as Record<string, unknown>)
-      const themes = normalizeCustomThemes(rawCustomThemes)
-      const themeActive = normalizeCustomThemeActive(rawCustomThemeActive as Record<string, unknown>, themes)
-      this.cachedHotwords = composeHotwords([], setWords, setActive, themes, themeActive)
-    } catch {
-      this.cachedHotwords = []
-    }
-  }
-
-  private async loadLanguage(): Promise<void> {
-    try {
-      const lang = await getSetting('server.language', 'auto') as string
-      this.cachedLanguage = lang && lang !== 'auto' ? lang : ''
-    } catch {
-      this.cachedLanguage = ''
-    }
-  }
-
-  private async loadMouseSettings(): Promise<void> {
-    try {
-      const [scrollUp, scrollDown, scrollUpThreshold, scrollDownThreshold] = await Promise.all([
-        getSetting('scrollUpToSend', false),
-        getSetting('scrollDownToDelete', false),
-        getSetting('scrollUpSensitivity', 1),
-        getSetting('scrollDownSensitivity', 1),
-      ])
-      this.cachedScrollUp = Boolean(scrollUp)
-      this.cachedScrollDown = Boolean(scrollDown)
-      this.cachedScrollUpThreshold = Number(scrollUpThreshold) || 1
-      this.cachedScrollDownThreshold = Number(scrollDownThreshold) || 1
-    } catch {
-      // use defaults
-    }
   }
 
   // ─── 鼠标 PTT / 滚动 IPC ───

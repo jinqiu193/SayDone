@@ -35,9 +35,9 @@ export interface HistoryRecord {
   autoAppliedHotwords?: string[]
   manualEditedAt?: number
   // 推理来源信息
-  workMode?: 'server' | 'cloud_api' | 'local'
-  asrProvider?: string   // 例如 "server" / "doubao" / "sensevoice-small"
-  aiProvider?: string    // 例如 "server" / "openai_compat" / "ollama"
+  workMode?: 'cloud_api' | 'local'
+  asrProvider?: string   // 例如 "doubao" / "sensevoice-small"
+  aiProvider?: string    // 例如 "openai_compat" / "ollama"
   aiModel?: string       // 例如 "deepseek-chat" / "qwen2.5:7b"
   // 会议纪要扩展字段（持久化在 raw_json 中，无需 Migration）
   isMeeting?: boolean
@@ -403,6 +403,21 @@ import { getDefault } from './defaults'
 
 const settingCache = new Map<string, unknown>()
 
+function validateSettingType<T>(val: unknown, defaultValue: T): T {
+  if (val === null || val === undefined) {
+    return defaultValue
+  }
+  if (defaultValue !== null && defaultValue !== undefined) {
+    const expectedType = typeof defaultValue
+    if (expectedType === 'string' || expectedType === 'number' || expectedType === 'boolean') {
+      if (typeof val !== expectedType) {
+        return defaultValue
+      }
+    }
+  }
+  return val as T
+}
+
 export async function getSetting<T>(key: string, fallback?: T): Promise<T> {
   if (settingCache.has(key)) {
     return settingCache.get(key) as T
@@ -414,21 +429,53 @@ export async function getSetting<T>(key: string, fallback?: T): Promise<T> {
     return defaultValue
   }
   const val = await client.storeGet(key)
-  if (val === null || val === undefined) {
-    settingCache.set(key, defaultValue)
-    return defaultValue
-  }
-  if (defaultValue !== null && defaultValue !== undefined) {
-    const expectedType = typeof defaultValue
-    if (expectedType === 'string' || expectedType === 'number' || expectedType === 'boolean') {
-      if (typeof val !== expectedType) {
-        settingCache.set(key, defaultValue)
-        return defaultValue
-      }
+  const result = validateSettingType(val, defaultValue)
+  settingCache.set(key, result)
+  return result
+}
+
+export async function getSettingsBatch<T extends Record<string, unknown>>(
+  keysWithDefaults: T
+): Promise<T> {
+  const result = { ...keysWithDefaults } as Record<string, unknown>
+  const uncachedKeys: string[] = []
+
+  for (const key of Object.keys(keysWithDefaults)) {
+    if (settingCache.has(key)) {
+      result[key] = settingCache.get(key)
+    } else {
+      uncachedKeys.push(key)
     }
   }
-  settingCache.set(key, val)
-  return val as T
+
+  if (uncachedKeys.length === 0) {
+    return result as T
+  }
+
+  const client = api()
+  if (!client?.storeBatchGet) {
+    for (const key of uncachedKeys) {
+      result[key] = await getSetting(key, keysWithDefaults[key])
+    }
+    return result as T
+  }
+
+  try {
+    const batchResult = await client.storeBatchGet(uncachedKeys)
+    for (const key of uncachedKeys) {
+      const defaultValue = keysWithDefaults[key]
+      const val = batchResult[key]
+      const validated = validateSettingType(val, defaultValue)
+      settingCache.set(key, validated)
+      result[key] = validated
+    }
+  } catch {
+    for (const key of uncachedKeys) {
+      result[key] = await getSetting(key, keysWithDefaults[key])
+    }
+  }
+
+  return result as T
 }
 
 export async function setSetting(key: string, value: unknown): Promise<void> {

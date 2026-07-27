@@ -31,7 +31,6 @@ const themes: Record<string, ThemeDefinition> = {
 const LEGACY_ALIAS: Record<string, ThemeId> = {
   light: 'han-shan',
   dark: 'ye-lan',
-  claude: 'chi-tao',
   teal: 'wu-song',
   'teal-dark': 'qing-lin',
 }
@@ -94,9 +93,8 @@ export function applyTheme(id: string): string {
     root.classList.remove('dark')
   }
 
-  // 切换主题标识 class（方便主题特定 CSS）
-  for (const t of themeList) {
-    root.classList.remove(`theme-${t.id}`)
+  if (currentThemeId && currentThemeId !== theme.id) {
+    root.classList.remove(`theme-${currentThemeId}`)
   }
   root.classList.add(`theme-${theme.id}`)
 

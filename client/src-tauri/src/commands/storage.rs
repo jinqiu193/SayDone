@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use serde_json::Value;
 use tauri::State;
 use crate::storage::Storage;
+use crate::config::invalidate_cache;
 
 #[tauri::command]
 pub fn store_get(key: String, storage: State<Storage>) -> Result<Value, String> {
@@ -8,8 +10,19 @@ pub fn store_get(key: String, storage: State<Storage>) -> Result<Value, String> 
 }
 
 #[tauri::command]
+pub fn store_batch_get(keys: Vec<String>, storage: State<Storage>) -> Result<HashMap<String, Value>, String> {
+    let mut result = HashMap::new();
+    for key in keys {
+        result.insert(key.clone(), storage.get(&key, None));
+    }
+    Ok(result)
+}
+
+#[tauri::command]
 pub fn store_set(key: String, value: Value, storage: State<Storage>) -> Result<(), String> {
-    storage.set(&key, &value).map_err(|e| e.to_string())
+    storage.set(&key, &value).map_err(|e| e.to_string())?;
+    invalidate_cache();
+    Ok(())
 }
 
 #[tauri::command]

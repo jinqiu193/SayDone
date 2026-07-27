@@ -1,7 +1,7 @@
 import type { ThemeDefinition } from './types'
 
 /**
- * 赤陶 — 暖橘（替代旧 claude 暖化）
+ * 赤陶 — 暖橘
  * 杏黄淡赭，手作陶器般的温度
  */
 const chiTao: ThemeDefinition = {

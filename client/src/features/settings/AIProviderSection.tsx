@@ -9,7 +9,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getSetting, setSetting } from '@/services/store'
-import { getWorkMode } from '@/services/transcription'
 
 const AI_PROVIDERS = [
   { value: 'openai_compat', label: 'OpenAI 兼容', urlPlaceholder: 'https://api.openai.com', modelPlaceholder: 'gpt-4o-mini' },
@@ -89,14 +88,9 @@ export default function AIProviderSection() {
   const [aiTesting, setAiTesting] = useState(false)
   const [aiMessage, setAiMessage] = useState('')
   const [aiDetail, setAiDetail] = useState('')
-  const [workMode, setWorkMode] = useState(getWorkMode)
 
   useEffect(() => {
     void loadSettings()
-    getSetting('workMode', 'server').then((v) => {
-      const m = v as string
-      if (m === 'server' || m === 'cloud_api' || m === 'local') setWorkMode(m as typeof workMode)
-    })
   }, [])
 
   // 每个供应商的默认模型（新用户首次使用时自动填充）
@@ -243,23 +237,6 @@ export default function AIProviderSection() {
 
   const inputClass = 'h-9 w-full rounded-md bg-secondary/60 px-3 text-sm outline-none transition-colors focus:ring-2 focus:ring-cta/30'
   const selectClass = 'h-9 w-full rounded-md bg-secondary/60 px-2 text-sm outline-none transition-colors focus:ring-2 focus:ring-cta/30'
-
-  // server 模式下隐藏 AI 配置（AI 校对由服务器处理）
-  if (workMode === 'server') {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="mb-1 text-lg font-semibold">AI 供应商</h2>
-          <p className="mb-2 text-sm text-muted-foreground">
-            当前为服务器模式，AI 整理由服务器统一处理，无需配置客户端。
-          </p>
-          <p className="text-xs text-muted-foreground/80">
-            如需切换到客户端 AI 整理，请前往「语音引擎」选择云 API 或本地模式。
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
 
   return (
     <>

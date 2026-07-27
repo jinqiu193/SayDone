@@ -1,16 +1,30 @@
 // 会议实时字幕面板
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { MeetingRuntime } from '@/services/meeting/types'
 
 export function MeetingLiveCaption({ runtime }: { runtime: MeetingRuntime }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const isAtBottomRef = useRef(true)
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const threshold = 50
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  }, [])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    if (isAtBottomRef.current) {
+      scrollToBottom()
     }
-  }, [runtime.fullText, runtime.pendingText])
+  }, [runtime.fullText, runtime.pendingText, scrollToBottom])
 
   if (runtime.state === 'idle') {
     return (
@@ -23,6 +37,7 @@ export function MeetingLiveCaption({ runtime }: { runtime: MeetingRuntime }) {
   return (
     <div
       ref={scrollRef}
+      onScroll={handleScroll}
       className="custom-scrollbar h-96 overflow-y-auto rounded-lg bg-card p-4"
     >
       {runtime.finalizedSegments.length === 0 && !runtime.pendingText && (
