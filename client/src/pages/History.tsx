@@ -52,113 +52,6 @@ interface ReprocessResult {
   asrModel?: string
 }
 
-/** 服务器模式重新识别：通过独立 WebSocket 连接，避免干扰全局连接 */
-async function reprocessViaServer(
-  chunk: ArrayBuffer,
-  hotwords: string[],
-  aiEnabled: boolean,
-  systemPrompt: string | undefined,
-  clientMeta: Awaited<ReturnType<typeof bridge.getClientRuntimeInfo>> | null,
-): Promise<ReprocessResult> {
-  const { getWSUrl } = await import('@/services/runtimeConfig')
-  const wsUrl = getWSUrl()
-
-  return new Promise<ReprocessResult>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      try { socket.close() } catch { /* ignore */ }
-      reject(new Error('重新识别超时'))
-    }, 30_000) // ASR 最多 30 秒
-
-    const socket = new WebSocket(wsUrl)
-    socket.binaryType = 'arraybuffer'
-
-    let resolved = false
-
-    socket.onopen = () => {
-      const startMsg: Record<string, unknown> = {
-        cmd: 'start',
-        source: 'history_reprocess',
-        disable_ai: !aiEnabled,
-      }
-      if (aiEnabled && systemPrompt) startMsg.system_prompt = systemPrompt
-      if (clientMeta) {
-        startMsg.client_meta = {
-          user_id: clientMeta.userId,
-          device_id: clientMeta.deviceId,
-          hostname: clientMeta.hostname,
-          client_version: clientMeta.clientVersion,
-          platform: clientMeta.platform,
-          os_version: clientMeta.osVersion,
-          local_ip: clientMeta.localIp,
-          system_locale: clientMeta.systemLocale,
-          cpu_cores: clientMeta.cpuCores,
-          memory_mb: clientMeta.memoryMb,
-        }
-      }
-      if (hotwords.length > 0) startMsg.hotwords = hotwords
-      socket.send(JSON.stringify(startMsg))
-
-      // 分片发送 PCM 数据
-      const CHUNK_SIZE = 32000
-      const totalBytes = chunk.byteLength
-      for (let offset = 0; offset < totalBytes; offset += CHUNK_SIZE) {
-        const end = Math.min(offset + CHUNK_SIZE, totalBytes)
-        socket.send(chunk.slice(offset, end))
-      }
-
-      socket.send(JSON.stringify({ cmd: 'stop' }))
-    }
-
-    socket.onmessage = (ev) => {
-      if (typeof ev.data !== 'string') return
-      try {
-        const msg = JSON.parse(ev.data)
-        if (msg.type === 'final') {
-          resolved = true
-          clearTimeout(timeout)
-          socket.close()
-          resolve({
-            asrText: msg.asr_text || '',
-            llmText: msg.llm_text || '',
-            asrMs: msg.asr_ms || 0,
-            llmMs: msg.llm_ms || 0,
-            durationSec: Number(msg.duration_sec || 0),
-            asrEngine: msg.asr_engine || undefined,
-            asrModel: msg.asr_model || undefined,
-          })
-        } else if (msg.type === 'done' && !resolved) {
-          // 没有 final 就 done 了（后端判定为静音/无结果）
-          resolved = true
-          clearTimeout(timeout)
-          socket.close()
-          resolve({ asrText: '', llmText: '', asrMs: 0, llmMs: 0, durationSec: 0 })
-        } else if (msg.type === 'error') {
-          resolved = true
-          clearTimeout(timeout)
-          socket.close()
-          reject(new Error(msg.message || 'backend error'))
-        }
-      } catch { /* ignore parse errors */ }
-    }
-
-    socket.onerror = () => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        reject(new Error('WebSocket 连接错误'))
-      }
-    }
-
-    socket.onclose = (ev) => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        reject(new Error(`WebSocket 连接意外关闭 code=${ev.code}`))
-      }
-    }
-  })
-}
-
 /** 云 API 模式重新识别：调用 cloud_transcribe + 可选 cloud_polish，与 CloudAPIProvider 一致 */
 async function reprocessViaCloudApi(
   chunk: ArrayBuffer,
@@ -295,11 +188,7 @@ async function buildReprocessMetadata(
     const aiModel = aiEnabled ? await getSetting('cloudAi.model', '') as string : undefined
     return { asrProvider: modelId || 'local', aiProvider: aiProvider || undefined, aiModel: aiModel || undefined }
   }
-  // server
-  return {
-    asrProvider: (result.asrModel || result.asrEngine || 'server').replace(/^.*\//, ''),
-    aiProvider: 'server',
-  }
+  return { asrProvider: undefined, aiProvider: undefined, aiModel: undefined }
 }
 
 export default function History() {
@@ -402,14 +291,13 @@ export default function History() {
     })
 
     // 并行加载所有初始数据，减少等待时间
-    const [preset, rawAiEnabled, rawSetWords, rawSetActive, rawCustomThemes, rawCustomThemeActive, clientMeta] = await Promise.all([
+    const [preset, rawAiEnabled, rawSetWords, rawSetActive, rawCustomThemes, rawCustomThemeActive] = await Promise.all([
       getActivePreset(),
       getSetting('aiEnabled', false),
       getSetting(BUILTIN_SET_WORDS_KEY, {}),
       getSetting(BUILTIN_SET_ACTIVE_KEY, {}),
       getSetting(CUSTOM_THEMES_KEY, []),
       getSetting(CUSTOM_THEME_ACTIVE_KEY, {}),
-      bridge.getClientRuntimeInfo().catch(() => null),
     ])
 
     // 组合热词
@@ -425,17 +313,14 @@ export default function History() {
     const aiEnabled = rawAiEnabled as boolean
 
     // 按用户当前选择的工作模式重新识别，与实时录音保持一致
-    // （此前这里硬编码走服务器模式，导致云 API/本地模式下重新识别被错误地发回服务器）
     const workMode = getWorkMode()
     const systemPrompt = aiEnabled ? preset.systemPrompt : undefined
 
     let result: ReprocessResult
     if (workMode === 'cloud_api') {
       result = await reprocessViaCloudApi(chunk, hotwords, Boolean(aiEnabled), systemPrompt)
-    } else if (workMode === 'local') {
-      result = await reprocessViaLocal(chunk, Boolean(aiEnabled), systemPrompt)
     } else {
-      result = await reprocessViaServer(chunk, hotwords, Boolean(aiEnabled), systemPrompt, clientMeta)
+      result = await reprocessViaLocal(chunk, Boolean(aiEnabled), systemPrompt)
     }
 
     // 极速模式下 llmText === asrText（后端未经 LLM 处理时直接复制 asrText）

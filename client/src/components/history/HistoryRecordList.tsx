@@ -289,7 +289,7 @@ const HistoryItem = memo(function HistoryItem({
                 {record.workMode && (
                   <>
                     <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">
-                      {record.workMode === 'server' ? '服务器' : record.workMode === 'cloud_api' ? '云 API' : '本地'}
+                      {(record.workMode as string) === 'server' ? '服务器' : record.workMode === 'cloud_api' ? '云 API' : '本地'}
                     </span>
                     {record.asrProvider && (
                       <span className="text-xs">ASR: {ASR_PROVIDER_DISPLAY[record.asrProvider] || record.asrProvider}</span>
@@ -485,7 +485,7 @@ const HistoryItem = memo(function HistoryItem({
   )
 })
 
-function DayGroup({
+const DayGroup = memo(function DayGroup({
   label,
   records,
   onDelete,
@@ -516,7 +516,7 @@ function DayGroup({
       </CardContent>
     </Card>
   )
-}
+})
 
 export default function HistoryRecordList({
   records,

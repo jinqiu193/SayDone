@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,7 +17,7 @@ import {
   USEFUL_LOG_TYPES,
 } from './debugUtils'
 
-export default function SessionCard({ session, defaultOpen }: { session: DebugSession; defaultOpen?: boolean }) {
+export default memo(function SessionCard({ session, defaultOpen }: { session: DebugSession; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false)
   const [showAllLogs, setShowAllLogs] = useState(false)
 
@@ -138,4 +138,4 @@ export default function SessionCard({ session, defaultOpen }: { session: DebugSe
       </CardContent>
     </Card>
   )
-}
+})

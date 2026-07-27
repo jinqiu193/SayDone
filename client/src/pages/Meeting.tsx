@@ -48,8 +48,10 @@ export default function Meeting() {
   const [meetings, setMeetings] = useState<HistoryRecord[]>([])
   const [selectedMeeting, setSelectedMeeting] = useState<HistoryRecord | null>(null)
   const [deletingId, setDeletingId] = useState<string>('')
+  const [currentMode, setCurrentMode] = useState<string>('')
 
   useEffect(() => {
+    void getSetting('workMode', 'cloud_api').then((m) => setCurrentMode(String(m)))
     return MeetingService.subscribe(setRuntime)
   }, [])
 
@@ -86,7 +88,7 @@ export default function Meeting() {
           meetingTitle: title,
           meetingSummary: '',
           meetingSegments: runtime.finalizedSegments,
-          workMode: (workMode === 'server' || workMode === 'cloud_api' || workMode === 'local')
+          workMode: (workMode === 'cloud_api' || workMode === 'local')
             ? workMode : 'cloud_api',
         }).then(() => {
           setHistoryId(id)
@@ -203,7 +205,7 @@ export default function Meeting() {
               <Mic className="h-4 w-4" /> 开始会议
             </Button>
             <span className="text-xs text-muted-foreground">
-              支持云 API / 本地 ASR / 服务器三种模式
+              当前引擎：{currentMode === 'local' ? '本地 ASR' : currentMode === 'cloud_api' ? '云 API' : '未设置'}
             </span>
           </>
         )}
@@ -323,6 +325,17 @@ export default function Meeting() {
                   } catch (err) {
                     addRuntimeEvent('warn', 'meeting', '保存总结失败', { error: String(err) })
                   }
+                }
+              }}
+              onFullTextChange={async (text) => {
+                if (selectedMeeting) {
+                  setSelectedMeeting({
+                    ...selectedMeeting,
+                    asrText: text,
+                    llmText: text,
+                    charCount: text.length,
+                  })
+                  await loadMeetings()
                 }
               }}
             />

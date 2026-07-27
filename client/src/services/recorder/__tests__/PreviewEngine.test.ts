@@ -184,8 +184,8 @@ describe('PreviewEngine', () => {
   // ─── transcribeSegmentPreview ───
 
   describe('transcribeSegmentPreview 内部行为', () => {
-    it('server mode 不调 invoke', async () => {
-      ;(deps.getProviderMode as any).mockReturnValue('server')
+    it('未知 mode 不调 invoke', async () => {
+      ;(deps.getProviderMode as any).mockReturnValue('unknown')
       for (let i = 0; i < 16; i++) engine.onPcmFrame(pcm(1000, 1000), 0.05)
       engine.onPcmFrame(pcm(16000, 0), 0)
       await new Promise(r => setTimeout(r, 10))

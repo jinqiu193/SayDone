@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Mic, Sparkles, Globe, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, Keyboard } from 'lucide-react'
+import { Mic, Sparkles, Globe, ArrowRight, ArrowLeft, CheckCircle2, Keyboard } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { getSetting, setSetting } from '@/services/store'
 import { getWorkMode } from '@/services/transcription'
-import { healthCheck } from '@/services/api'
 import * as bridge from '@/services/bridge'
 import appIcon from '@/assets/icon-128.png'
 
@@ -71,7 +70,6 @@ function KeyboardHint({ activeKey, pressed }: { activeKey: string; pressed?: boo
 }
 
 const MODE_LABELS: Record<string, string> = {
-  server: '服务器模式',
   cloud_api: '云 API 模式',
   local: '本地模式',
 }
@@ -81,7 +79,6 @@ export default function Welcome() {
   const [pttKey, setPttKey] = useState('AltRight')
   const [pttLabel, setPttLabel] = useState('右 Alt')
   const [workMode, setWorkMode] = useState('')
-  const [serverOk, setServerOk] = useState<boolean | null>(null)
   const [testText, setTestText] = useState('')
   const [listeningKey, setListeningKey] = useState(false)
   const [pttConfirmed, setPttConfirmed] = useState(false)
@@ -95,9 +92,6 @@ export default function Welcome() {
     })
     const mode = getWorkMode()
     setWorkMode(mode)
-    if (mode === 'server') {
-      healthCheck().then(() => setServerOk(true)).catch(() => setServerOk(false))
-    }
   }, [])
 
   // 热键确认步骤：监听按键按下和松开
@@ -155,7 +149,8 @@ export default function Welcome() {
     return () => window.removeEventListener('keydown', handler)
   }, [listeningKey])
 
-  const canTest = workMode === 'server' && serverOk === true
+  // 云 API / 本地模式均需先在设置中配置密钥/模型，向导内无法直接测试
+  const canTest = false
   const totalSteps = 5
 
   const renderStep = () => {
@@ -178,7 +173,7 @@ export default function Welcome() {
               {[
                 { icon: Mic, title: '按住说话，松开输入', desc: '全局热键唤起，在任何应用中直接语音输入，无需切换窗口', color: 'text-cta bg-cta/10' },
                 { icon: Sparkles, title: 'AI 智能润色', desc: '口语自动转书面语，支持自定义 Prompt，完全掌控 AI 行为', color: 'text-warning bg-warning/10' },
-                { icon: Globe, title: '灵活部署', desc: '支持服务器、云 API、本地三种模式，按需选择，数据流向透明可控', color: 'text-success bg-success/10' },
+                { icon: Globe, title: '灵活部署', desc: '支持云 API、本地两种模式，按需选择，数据流向透明可控', color: 'text-success bg-success/10' },
               ].map(({ icon: Icon, title, desc, color }) => (
                 <Card key={title}>
                   <CardContent className="flex items-center gap-4 p-4">
@@ -272,20 +267,7 @@ export default function Welcome() {
                   <p className="text-sm font-medium">当前模式</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{MODE_LABELS[workMode] || workMode}</p>
                 </div>
-                {workMode === 'server' && (
-                  <div className="flex items-center gap-1.5">
-                    {serverOk === null ? (
-                      <span className="text-xs text-muted-foreground">检测中...</span>
-                    ) : serverOk ? (
-                      <><CheckCircle2 className="h-4 w-4 text-success" /><span className="text-xs text-success">已连接</span></>
-                    ) : (
-                      <><AlertCircle className="h-4 w-4 text-destructive" /><span className="text-xs text-destructive">未连接</span></>
-                    )}
-                  </div>
-                )}
-                {workMode !== 'server' && (
-                  <span className="text-xs text-muted-foreground">需在设置中配置</span>
-                )}
+                <span className="text-xs text-muted-foreground">需在设置中配置</span>
               </CardContent>
             </Card>
 

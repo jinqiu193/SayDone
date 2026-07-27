@@ -94,8 +94,9 @@ export default function Overlay() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevStateRef = useRef<OverlayState>('waiting')
 
-  const thinkingColor = getAccentColor()
-  const timerColor = getAccentColor()
+  const accentColor = useMemo(() => getAccentColor(), [])
+  const thinkingColor = accentColor
+  const timerColor = accentColor
 
   const barElements = useMemo(() => (
     <div className="flex items-center gap-[2px]" style={{ height: '20px' }}>

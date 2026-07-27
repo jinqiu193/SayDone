@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Download, Keyboard, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -161,7 +161,7 @@ export function AudioPlayer({ session }: { session: DebugSession }) {
   )
 }
 
-export function LogItem({ msg }: { msg: DebugMessage }) {
+export const LogItem = memo(function LogItem({ msg }: { msg: DebugMessage }) {
   const [expanded, setExpanded] = useState(false)
   const isSent = msg.direction === 'sent'
 
@@ -189,9 +189,9 @@ export function LogItem({ msg }: { msg: DebugMessage }) {
       )}
     </div>
   )
-}
+})
 
-export function RuntimeItem({ event }: { event: RuntimeEvent }) {
+export const RuntimeItem = memo(function RuntimeItem({ event }: { event: RuntimeEvent }) {
   const tone = event.level === 'error'
     ? 'border-destructive/20 bg-destructive/10 text-destructive'
     : event.level === 'warn'
@@ -215,7 +215,7 @@ export function RuntimeItem({ event }: { event: RuntimeEvent }) {
       )}
     </div>
   )
-}
+})
 
 export function PTTTimelineCard({
   pttEvents,
