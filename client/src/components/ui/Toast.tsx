@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, memo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -50,7 +50,7 @@ interface ToastItemProps {
   onRemove: (id: string) => void
 }
 
-function ToastItem({ toast, onRemove }: ToastItemProps) {
+const ToastItem = memo(function ToastItem({ toast, onRemove }: ToastItemProps) {
   const Icon = icons[toast.type]
 
   React.useEffect(() => {
@@ -82,7 +82,7 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
       </button>
     </div>
   )
-}
+})
 
 interface ToastContainerProps {
   toasts: Toast[]
