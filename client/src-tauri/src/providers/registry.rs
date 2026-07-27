@@ -602,10 +602,7 @@ pub async fn summarize_meeting(
             meeting_summarize::summarize_meeting(&request.text, config).await
         }
         "ollama" => {
-            // Ollama 也复用同款 prompt（不通过 wrap_user_text，因为会议场景是 Chat 模式）
-            // 但 Ollama provider 没有 polish summary 方法，复用 ai_ollama::polish 不可行
-            // 这里直接返回错误：会议总结目前只支持云 API
-            Err("会议总结暂不支持 Ollama，请配置云 API".to_string())
+            ai_ollama::summarize_meeting(&request.text, config).await
         }
         other => Err(format!("未知的 AI 供应商: {}", other)),
     }

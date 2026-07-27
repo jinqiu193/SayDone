@@ -129,7 +129,6 @@ export class PreviewEngine {
     if (segBuffers.length === 0 || segSamples < PREVIEW_MIN_SEG_SAMPLES) return
 
     const mode = this.deps.getProviderMode()
-    if (mode === 'server') return
 
     const totalBytes = segBuffers.reduce((s, b) => s + b.byteLength, 0)
     const merged = new Uint8Array(totalBytes)

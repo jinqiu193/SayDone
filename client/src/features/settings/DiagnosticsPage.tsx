@@ -87,7 +87,7 @@ export default function DiagnosticsPage() {
   async function runHealthCheck() {
     const items: HealthItem[] = []
     const workMode = getWorkMode()
-    items.push({ label: '工作模式', status: 'ok', detail: workMode === 'server' ? '服务器' : workMode === 'cloud_api' ? '云 API' : '本地' })
+    items.push({ label: '工作模式', status: 'ok', detail: workMode === 'cloud_api' ? '云 API' : '本地' })
 
     // ASR 检查
     if (workMode === 'cloud_api') {
@@ -124,12 +124,10 @@ export default function DiagnosticsPage() {
     } else if (workMode === 'local') {
       const modelId = await getSetting('localAsr.modelId', '') as string
       items.push({ label: 'ASR', status: modelId ? 'ok' : 'error', detail: modelId || '未选择模型' })
-    } else {
-      items.push({ label: 'ASR', status: 'ok', detail: '由服务器提供' })
     }
 
     // AI 检查
-    if (workMode !== 'server') {
+    {
       const aiEnabled = await getSetting('aiEnabled', false) as boolean
       if (!aiEnabled) {
         items.push({ label: 'AI 校对', status: 'ok', detail: '已关闭（极速模式）' })
@@ -154,8 +152,6 @@ export default function DiagnosticsPage() {
           }
         }
       }
-    } else {
-      items.push({ label: 'AI 校对', status: 'ok', detail: '由服务器提供' })
     }
 
     setHealth(items)

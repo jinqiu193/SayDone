@@ -1,9 +1,8 @@
 // 工作模式切换卡片
 
 import PageSection from '@/components/ui/PageSection'
-import StatusBadge, { type StatusTone } from '@/components/ui/StatusBadge'
-import { useConnectionStatus } from '@/hooks/useConnectionStatus'
-import { Monitor, Globe, HardDrive, type LucideIcon } from 'lucide-react'
+import StatusBadge from '@/components/ui/StatusBadge'
+import { Monitor, Globe, type LucideIcon } from 'lucide-react'
 import type { WorkMode } from '@/services/transcription'
 
 const modes: Array<{ value: WorkMode; label: string; desc: string; privacy: string; icon: LucideIcon; iconColor: string }> = [
@@ -19,22 +18,7 @@ const modes: Array<{ value: WorkMode; label: string; desc: string; privacy: stri
     privacy: '音与文俱送所配云服务，去处自决。',
     icon: Globe, iconColor: 'text-primary',
   },
-  {
-    value: 'server', label: '服务器 · 自建',
-    desc: '连自部署之器，听命自调',
-    privacy: '音送伺服端过而不留，结果归本机。',
-    icon: HardDrive, iconColor: 'text-primary',
-  },
 ]
-
-type ConnectionStatus = ReturnType<typeof useConnectionStatus>
-
-const statusConfig: Record<ConnectionStatus, { tone: StatusTone; text: string; dotClassName?: string }> = {
-  connected:    { tone: 'success', text: '已连接' },
-  connecting:   { tone: 'warning', text: '连接中', dotClassName: 'animate-pulse' },
-  disconnected: { tone: 'neutral', text: '未连接' },
-  error:        { tone: 'error', text: '连接失败' },
-}
 
 interface Props {
   value: WorkMode
@@ -42,22 +26,13 @@ interface Props {
 }
 
 export default function WorkModeSection({ value, onChange }: Props) {
-  const wsStatus = useConnectionStatus()
-
-  const showServerStatus = value === 'server'
-  const status = showServerStatus ? statusConfig[wsStatus] : null
-
   return (
     <PageSection
       title="听写之制"
-      action={
-        showServerStatus && status
-          ? <StatusBadge tone={status.tone} dot dotClassName={status.dotClassName}>{status.text}</StatusBadge>
-          : <StatusBadge tone="success" dot>就绪</StatusBadge>
-      }
+      action={<StatusBadge tone="success" dot>就绪</StatusBadge>}
       divided={false}
     >
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {modes.map((m) => {
           const isActive = value === m.value
           const Icon = m.icon

@@ -920,12 +920,6 @@ export class RecorderOrchestrator {
     aiModel?: string
   }> {
     const mode = this.provider.mode
-    if (mode === 'server') {
-      let asrProvider = finalResult?.asrModel || finalResult?.asrEngine || 'server'
-      const slashIdx = asrProvider.lastIndexOf('/')
-      if (slashIdx >= 0) asrProvider = asrProvider.slice(slashIdx + 1)
-      return { asrProvider, aiProvider: 'server' }
-    }
     if (mode === 'cloud_api') {
       const asrProviderKey = await getSetting('cloudAsr.provider', '') as string
       const ASR_MODEL_ID_MAP: Record<string, string> = {

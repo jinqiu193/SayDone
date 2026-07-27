@@ -35,9 +35,9 @@ export interface HistoryRecord {
   autoAppliedHotwords?: string[]
   manualEditedAt?: number
   // 推理来源信息
-  workMode?: 'server' | 'cloud_api' | 'local'
-  asrProvider?: string   // 例如 "server" / "doubao" / "sensevoice-small"
-  aiProvider?: string    // 例如 "server" / "openai_compat" / "ollama"
+  workMode?: 'cloud_api' | 'local'
+  asrProvider?: string   // 例如 "doubao" / "sensevoice-small"
+  aiProvider?: string    // 例如 "openai_compat" / "ollama"
   aiModel?: string       // 例如 "deepseek-chat" / "qwen2.5:7b"
   // 会议纪要扩展字段（持久化在 raw_json 中，无需 Migration）
   isMeeting?: boolean
