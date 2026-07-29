@@ -88,6 +88,7 @@ This project builds upon the work of outstanding open-source projects. We deeply
 
 | Project | Author | License | Contribution |
 |---------|--------|---------|-------------|
+| [SayIt](https://github.com/crosswk/SayIt) | crosswk | AGPL-3.0 | Primary reference — voice input + AI polishing architecture |
 | [VocoType](https://github.com/233stone/vocotype-cli) | 233stone | Apache 2.0 | Core voice input architecture and CLI reference |
 | [FunASR](https://github.com/modelscope/FunASR) | Alibaba DAMO Academy | Apache 2.0 | Offline speech recognition engine |
 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | k2-fsa | Apache 2.0 | C/C++ speech recognition framework with ONNX runtime |
