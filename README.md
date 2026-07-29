@@ -1,73 +1,80 @@
-# 言出，文成
+# SayDone
 
-**随口说，出色写 — 用说话代替打字，AI 实时把口语变成书面表达。**
+**Speak naturally, write brilliantly — Replace typing with your voice, AI turns spoken words into polished text in real time.**
 
-按下快捷键开始说话，再按一次，润色后的文字自动输入到光标位置。
+[中文文档](README.zh-CN.md) | English
 
----
-
-## 功能特性
-
-- **全局语音输入** — 在任何应用中按下快捷键即可口述，文字自动插入光标位置
-- **AI 智能润色** — 口语自动转书面语，去口癖、纠错、分段
-- **多种语音识别** — 豆包 ASR、千问 ASR、本地离线识别
-- **热词增强** — 自定义专业术语词表，提升识别准确率
-- **悬浮窗反馈** — 录音状态、波形动画、处理进度实时可见
-- **历史记录** — 所有转录结果本地保存，支持搜索和收藏
-- **多主题** — 支持多种主题风格，界面美观
+Press a hotkey to start speaking, release to finish — AI-polished text is automatically inserted at your cursor position.
 
 ---
 
-## 下载
+## Features
 
-[下载 Windows 安装包](https://github.com/crosswk/YCRW/releases)
-
----
-
-## 使用方法
-
-### 快捷键
-
-| 模式 | 快捷键 | 说明 |
-|------|--------|------|
-| 按住说话 | `Alt` | 按住开始录音，松开结束并转文字 |
-| 免提模式 | `Shift` | 按一次开始，再按结束 |
-| AI 对话 | `Ctrl` | 按住录音，松开后 AI 回复 |
-
-### 配置
-
-1. 首次使用需要配置语音识别和 AI 润色服务
-2. 支持云 API（豆包、千问等）和本地部署
-3. 可以自定义热词库，提升专业术语识别准确率
+- **Global Voice Input** — Press a hotkey in any application to dictate; text is auto-inserted at the cursor
+- **AI Polishing** — Automatically converts spoken language to written language, removes filler words, corrects errors, and restructures paragraphs
+- **Multiple ASR Engines** — Doubao ASR, Qwen3-ASR, local offline recognition (FunASR / sherpa-onnx)
+- **Hotword Enhancement** — Custom terminology dictionaries to improve recognition accuracy
+- **Overlay Feedback** — Real-time recording status, waveform animation, and processing progress
+- **History Records** — All transcriptions saved locally with search and favorites
+- **Template Matching** — RAG-based smart template system for scenario-specific polishing
+- **Mouse PTT** — Middle-button push-to-talk, scroll-up to send, scroll-down to delete
+- **Multi-Theme** — Multiple theme styles with a clean, modern UI
 
 ---
 
-## 技术栈
+## Download
 
-| 层 | 技术 |
-|----|------|
-| 桌面客户端 | Tauri v2、React、TypeScript、Tailwind CSS |
-| 客户端系统集成 | Rust（全局键盘钩子、剪贴板、SQLite） |
-| 语音识别 | Qwen3-ASR、字节豆包 ASR、FunASR |
-| AI 润色 | DeepSeek、通义千问、Azure OpenAI |
+[Download Windows Installer](https://github.com/jinqiu193/YCRW/releases)
 
 ---
 
-## 开发
+## Usage
+
+### Hotkeys
+
+| Mode | Key | Description |
+|------|-----|-------------|
+| Push to Talk | `Alt` | Hold to record, release to transcribe and insert |
+| Hands-Free | `Shift` | Press once to start, press again to stop |
+| AI Chat | `Ctrl` | Hold to record, release for AI response |
+| Mouse PTT | `Middle Button` | Hold middle button to talk |
+
+### Configuration
+
+1. Configure ASR and AI polishing services on first launch
+2. Supports cloud APIs (Doubao, Qwen, etc.) and local deployment
+3. Customize hotword dictionaries for domain-specific terminology
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Desktop Client | Tauri v2, React, TypeScript, Tailwind CSS |
+| System Integration | Rust (global keyboard hooks, clipboard, SQLite) |
+| Speech Recognition | Qwen3-ASR, Doubao ASR, FunASR, sherpa-onnx (C/C++) |
+| AI Polishing | DeepSeek, Qwen, Azure OpenAI |
+| RAG Embedding | fastembed |
+| Office Integration | UI Automation (UIA) for text insertion into Microsoft Office |
+
+---
+
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 cd client
 npm install
 
-# 开发模式
+# Development mode
 npm run tauri dev
 
-# 构建
+# Build
 npm run tauri build
 ```
 
-### 前置要求
+### Prerequisites
 
 - Node.js 18+
 - Rust 1.75+
@@ -75,6 +82,25 @@ npm run tauri build
 
 ---
 
-## 许可证
+## Acknowledgements & Open-Source Dependencies
 
-本项目仅供个人学习研究使用。
+This project builds upon the work of outstanding open-source projects. We deeply respect the intellectual property of all contributors and gratefully acknowledge the following projects:
+
+| Project | Author | License | Contribution |
+|---------|--------|---------|-------------|
+| [VocoType](https://github.com/233stone/vocotype-cli) | 233stone | Apache 2.0 | Core voice input architecture and CLI reference |
+| [FunASR](https://github.com/modelscope/FunASR) | Alibaba DAMO Academy | Apache 2.0 | Offline speech recognition engine |
+| [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | k2-fsa | Apache 2.0 | C/C++ speech recognition framework with ONNX runtime |
+| [ModelX RAG](https://github.com/modelx-ai/rag) | hua | AGPL-3.0 | RAG knowledge base system reference |
+| [Tauri](https://github.com/tauri-apps/tauri) | Tauri Apps | MIT/Apache 2.0 | Desktop application framework |
+| [React](https://github.com/facebook/react) | Meta | MIT | UI framework |
+
+**Note:** This project includes C/C++ components from sherpa-onnx for on-device speech recognition, and integrates with Microsoft Office via UI Automation (UIA) for text insertion. All third-party components retain their original licenses and copyrights.
+
+---
+
+## License
+
+This project is for personal learning and research use only. Third-party components are subject to their respective licenses.
+
+## Use plugin: trae-remote-official:github
