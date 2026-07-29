@@ -88,6 +88,7 @@ npm run tauri build
 
 | 项目 | 作者 | 许可证 | 贡献 |
 |------|------|--------|------|
+| [SayIt](https://github.com/crosswk/SayIt) | crosswk | AGPL-3.0 | 主要参考 — 语音输入 + AI 润色架构 |
 | [VocoType](https://github.com/233stone/vocotype-cli) | 233stone | Apache 2.0 | 核心语音输入架构与 CLI 参考 |
 | [FunASR](https://github.com/modelscope/FunASR) | 阿里巴巴达摩院 | Apache 2.0 | 离线语音识别引擎 |
 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | k2-fsa | Apache 2.0 | C/C++ 语音识别框架，基于 ONNX 运行时 |
