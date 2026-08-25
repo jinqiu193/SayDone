@@ -1,5 +1,6 @@
-// 本地 ASR 推理 — 使用 sherpa-onnx 官方 Rust crate
-// 模型加载后缓存，节省每次推理的初始化开销
+// 本地 ASR 推理 — sherpa-onnx (ONNX) / llama.cpp (GGUF) 双引擎
+// ONNX 模型加载后缓存，节省每次推理的初始化开销
+// GGUF 模型通过子进程调用 llama-funasr-sensevoice CLI
 
 use serde::Serialize;
 use std::path::Path;
@@ -17,6 +18,7 @@ use sherpa_onnx::{
 };
 
 use super::downloader::model_dir;
+use super::gguf_asr;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LocalAsrResult {
@@ -311,12 +313,26 @@ fn transcribe_with_cache(samples: &[f32]) -> Result<String, String> {
     Ok(result.text.trim().to_string())
 }
 
+/// 判断模型 ID 是否为 GGUF 类型
+fn is_gguf_model(model_id: &str) -> bool {
+    model_id.starts_with("sensevoice-small-gguf") || model_id.contains("-gguf-")
+}
+
 #[tauri::command]
 pub async fn preload_local_model(model_id: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let start = Instant::now();
-        ensure_loaded_internal(&model_id, "auto", true)?;
-        Ok(format!("模型已加载({}ms)", start.elapsed().as_millis()))
+        if is_gguf_model(&model_id) {
+            // GGUF: 检查 CLI 与模型文件
+            let _ = gguf_asr::resolve_sensevoice_cli()?;
+            if !gguf_asr::is_gguf_model_ready(&model_id) {
+                return Err(format!("GGUF 模型尚未下载: {}", model_id));
+            }
+            Ok(format!("GGUF 模型就绪 ({}ms)", start.elapsed().as_millis()))
+        } else {
+            ensure_loaded_internal(&model_id, "auto", true)?;
+            Ok(format!("模型已加载({}ms)", start.elapsed().as_millis()))
+        }
     })
     .await
     .map_err(|e| format!("预加载异常: {}", e))?
@@ -343,6 +359,23 @@ pub async fn local_transcribe(
         .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
         .collect();
 
+    // GGUF 分支：通过 llama-funasr-sensevoice CLI 推理
+    if is_gguf_model(&model_id) {
+        let mid = model_id.clone();
+        let lang = language.clone();
+        return tokio::task::spawn_blocking(move || {
+            let r = gguf_asr::transcribe_sensevoice_gguf(&mid, &samples, lang.as_deref())
+                .map_err(|e| format!("GGUF 推理失败: {}", e))?;
+            Ok(LocalAsrResult {
+                text: r.text,
+                elapsed_ms: r.elapsed_ms,
+            })
+        })
+        .await
+        .map_err(|e| format!("GGUF 推理异常: {}", e))?;
+    }
+
+    // ONNX 分支：sherpa-onnx
     tokio::task::spawn_blocking(move || {
         let lang = language.as_deref().unwrap_or("auto");
         ensure_loaded_internal(&model_id, lang, true)?;

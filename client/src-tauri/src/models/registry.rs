@@ -62,6 +62,13 @@ pub fn list_downloaded_models() -> Vec<LocalModelInfo> {
                     complete = model_path.join("encoder.int8.onnx").exists()
                         && model_path.join("decoder.int8.onnx").exists()
                         && model_path.join("tokens.txt").exists();
+                } else if model.model_type == "sensevoice-gguf" {
+                    // GGUF: 找 SenseVoice 主模型（VAD 可选但推荐）
+                    let has_sensevoice = model_path.join("sensevoice-small-q8.gguf").exists()
+                        || model_path.join("sensevoice-small-f16.gguf").exists()
+                        || model_path.join("SenseVoiceSmall-q8.gguf").exists()
+                        || model_path.join("SenseVoiceSmall-f16.gguf").exists();
+                    complete = has_sensevoice;
                 }
             }
         } else {

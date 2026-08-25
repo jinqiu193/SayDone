@@ -4,4 +4,5 @@ pub mod catalog;
 pub mod downloader;
 pub mod registry;
 pub mod local_asr;
+pub mod gguf_asr;
 pub mod test_audio;

@@ -36,7 +36,8 @@ tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 once_cell = "1"
 flate2 = "1"
 tar = "0.4"
-bzip2 = "0.4"
+bzip2 = { version = "0.4", features = ["static"] }
+tempfile = "3"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
 sherpa-onnx = { version = "1.12", default-features = false, features = ["shared"] }
 fastembed = "4"

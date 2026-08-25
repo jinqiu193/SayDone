@@ -30,8 +30,21 @@ runtime/
 *~
 nul
 
+# Cargo toolchain config (machine-specific)
+.cargo/config.toml
+
 # Large model files (ML models, pre-trained weights)
 poc-diarization/cache/
 rag-main/models/
 rag-main/data/
 poc-diarization/models/
+
+# ONNX runtime DLLs (downloaded at build time)
+client/src-tauri/*.dll
+client/src-tauri/native/
+
+# Vocotype legacy project
+vocotype-cli-master/
+
+# Scripts
+scripts/
