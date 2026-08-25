@@ -10,7 +10,6 @@
 //! 任何阶段失败都返回 `available=false`，前端退回普通 AI 对话流程。
 
 use serde::Serialize;
-use windows::core::Interface;
 
 #[cfg(windows)]
 use windows::Win32::Foundation::HANDLE;
@@ -53,17 +52,31 @@ pub struct SelectionCapture {
     /// 选区来源：`"uia"` / `"clipboard"` / `""`（失败时）
     #[serde(rename = "source")]
     pub source: String,
+    /// UIA TextPattern 是否可用（不支持时剪贴板降级安全）
+    #[serde(rename = "uiaPatternAvailable")]
+    pub uia_pattern_available: bool,
 }
 
 #[cfg(windows)]
 pub fn capture_selection() -> SelectionCapture {
-    // 先 UIA；失败/空 → 降级剪贴板
+    // 先 UIA：TextPattern 不支持时直接失败（不降级剪贴板，避免旧文本干扰）
+    // TextPattern 支持但选区为空时也降级（有些编辑器支持选区 API 但选区确实是空的）
     match capture_selection_via_uia() {
         Ok(cap) if cap.available => cap,
-        _ => capture_selection_via_clipboard().unwrap_or_else(|e| {
+        // TextPattern 不支持（cap.uia_pattern_available=false）→ 不降级，直接返回
+        Ok(cap) if !cap.uia_pattern_available => {
+            log::debug!("[selection] UIA TextPattern unavailable, skipping clipboard fallback");
+            cap
+        }
+        // TextPattern 支持但选区为空（可能有文本未选中）→ 降级剪贴板确认
+        Ok(cap) => capture_selection_via_clipboard().unwrap_or_else(|e| {
             log::debug!("[selection] clipboard fallback failed: {}", e);
-            SelectionCapture::default()
+            cap
         }),
+        Err(e) => {
+            log::debug!("[selection] UIA failed (no TextPattern): {}, skipping clipboard", e);
+            SelectionCapture::default()
+        }
     }
 }
 
@@ -79,6 +92,7 @@ fn capture_selection_via_uia() -> Result<SelectionCapture, String> {
     };
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     use windows::Win32::UI::Accessibility::CUIAutomation;
+    use windows::core::Interface;
 
     let co_init_result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
     let need_co_uninit = co_init_result.is_ok();
@@ -124,14 +138,25 @@ fn capture_selection_via_uia() -> Result<SelectionCapture, String> {
             text_pattern.GetSelection()
                 .map_err(|e| format!("GetSelection: {}", e))?
         };
+        // 拿焦点窗口 hwnd（提前计算，两个分支都需要）
+        let foreground = unsafe { GetForegroundWindow() };
+        let hwnd = if foreground.0.is_null() {
+            String::new()
+        } else {
+            format!("{}", foreground.0 as isize)
+        };
+
         let count = unsafe { selection_ranges.Length() }.unwrap_or(0);
         if count <= 0 {
             return Ok(SelectionCapture {
                 available: false,
+                uia_pattern_available: true,
+                text: String::new(),
+                hwnd,
+                length: 0,
                 control_type,
                 automation_id,
                 source: "uia".to_string(),
-                ..Default::default()
             });
         }
         let first_range = unsafe { selection_ranges.GetElement(0) }
@@ -142,14 +167,6 @@ fn capture_selection_via_uia() -> Result<SelectionCapture, String> {
             .map_err(|e| format!("GetText: {}", e))?;
         let text = bstr.to_string();
 
-        // 拿焦点窗口 hwnd（用 foreground window 作为选区所在窗口的近似标识）
-        let foreground = unsafe { GetForegroundWindow() };
-        let hwnd = if foreground.0.is_null() {
-            String::new()
-        } else {
-            format!("{}", foreground.0 as isize)
-        };
-
         Ok(SelectionCapture {
             length: text.chars().count(),
             text,
@@ -157,6 +174,7 @@ fn capture_selection_via_uia() -> Result<SelectionCapture, String> {
             control_type,
             automation_id,
             available: true,
+            uia_pattern_available: true,
             source: "uia".to_string(),
         })
     })();
@@ -215,8 +233,32 @@ fn capture_selection_via_clipboard() -> Result<SelectionCapture, String> {
         crate::commands::system::write_log_line("[RUST] [selection] 剪贴板方案：复制后剪贴板仍为空");
         return Ok(SelectionCapture {
             available: false,
+            uia_pattern_available: false,
             source: "clipboard".to_string(),
-            ..Default::default()
+            text: String::new(),
+            hwnd: String::new(),
+            control_type: String::new(),
+            automation_id: String::new(),
+            length: 0,
+        });
+    }
+
+    // 剪贴板文本超过 5000 字时，大概率是之前 Ctrl+C 了长文本而非当前选区
+    let text_chars = text.chars().count();
+    if text_chars > 5000 {
+        crate::commands::system::write_log_line(&format!(
+            "[RUST] [selection] 剪贴板方案：文本过长（{}字），忽略",
+            text_chars
+        ));
+        return Ok(SelectionCapture {
+            available: false,
+            uia_pattern_available: false,
+            source: "clipboard".to_string(),
+            text: String::new(),
+            hwnd: String::new(),
+            control_type: String::new(),
+            automation_id: String::new(),
+            length: 0,
         });
     }
 
@@ -239,6 +281,7 @@ fn capture_selection_via_clipboard() -> Result<SelectionCapture, String> {
         control_type: "Clipboard".to_string(),
         automation_id: String::new(),
         available: true,
+        uia_pattern_available: false,
         source: "clipboard".to_string(),
     })
 }

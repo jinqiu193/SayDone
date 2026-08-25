@@ -4,9 +4,14 @@
 use serde::Serialize;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH, Instant};
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 use super::downloader::model_dir;
 
@@ -391,6 +396,12 @@ pub fn transcribe_sensevoice_gguf(
 
     if let Some(vad) = vad_path.as_ref() {
         cmd.arg("--vad").arg(vad);
+    }
+
+    // Windows: 隐藏控制台窗口
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
     log::debug!(
