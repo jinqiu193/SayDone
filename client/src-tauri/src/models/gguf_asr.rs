@@ -327,46 +327,41 @@ fn create_temp_wav(samples: &[f32]) -> Result<TempWav, String> {
     Ok(TempWav { path: wav_path })
 }
 
-/// 判断一行输出是否为"日志/统计"类噪音行
-fn looks_like_log_line(trimmed: &str) -> bool {
-    if trimmed.starts_with('[') {
-        return true;
+/// 从 llama-funasr-sensevoice 输出中提取纯识别文本
+///
+/// 输出格式示例:
+///   "哭什么哭啊 [sensevoice] 1 vad segments [sensevoice] done 0.52s"
+///   "我有什么好哭的？ [sensevoice] 1 vad segments [sensevoice] done 0.44s"
+///
+/// 策略: 用 "[sensevoice]" 分割，每行取第一个片段（即实际语音文本），忽略元数据
+fn extract_sensevoice_text(stdout: &str, stderr: &str) -> String {
+    let raw = if stdout.trim().is_empty() { stderr } else { stdout };
+
+    if raw.trim().is_empty() {
+        return String::new();
     }
-    let up = trimmed.to_uppercase();
-    if up.contains("INFO") || up.contains("DEBUG") || up.contains("WARN") || up.contains("ERROR") {
-        return true;
-    }
-    let low = trimmed.to_lowercase();
-    if low.contains("loading")
-        || low.contains("load model")
-        || low.contains("model loaded")
-        || low.contains("total time")
-        || low.contains("rtf")
-        || low.contains("pipeline")
-        || low.contains("vad")
-        || low.contains("encoder")
-        || low.contains("decoder")
-        || low.contains("gguf")
-        || low.contains("tokens")
-        || low.contains("vocab")
-    {
-        return true;
-    }
-    // 纯数字/符号行 (统计数字、rtf 0.003x 之类)
-    let mut has_letter = false;
-    for c in trimmed.chars() {
-        if c.is_ascii_alphabetic() {
-            // "x" / "ms" / "s" 单独字母通常是统计单位
-            if c != 'x' && c != 's' && c != 'm' {
-                has_letter = true;
-                break;
-            }
+
+    let mut parts: Vec<String> = Vec::new();
+
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // 按 "[sensevoice]" 分割，取第一段（语音文本），忽略后面的元数据
+        let utterance = line.split("[sensevoice]").next().unwrap_or(line).trim();
+
+        if !utterance.is_empty() {
+            parts.push(utterance.to_string());
         }
     }
-    if !has_letter {
-        return true;
+
+    if parts.is_empty() {
+        return String::new();
     }
-    false
+
+    parts.join(" ")
 }
 
 /// 执行 llama-funasr-sensevoice 进行转写
@@ -429,38 +424,12 @@ pub fn transcribe_sensevoice_gguf(
         stderr
     );
 
-    // 解析输出：识别结果可能在 stdout 最后几行，也可能和日志混在一起
-    // 策略：
-    //  1) 先尝试整段处理：去掉日志行，其余拼起来
-    //  2) 若结果仍为空，再退回所有非空行拼接
-    let mut text = String::new();
-    let mut text_fallback = String::new();
-
-    for line in stdout.lines().chain(stderr.lines()) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if !text_fallback.is_empty() {
-            text_fallback.push(' ');
-        }
-        text_fallback.push_str(trimmed);
-
-        if looks_like_log_line(trimmed) {
-            continue;
-        }
-        if !text.is_empty() {
-            text.push(' ');
-        }
-        text.push_str(trimmed);
-    }
-
-    let text = text.trim().to_string();
-    let final_text = if text.is_empty() {
-        text_fallback.trim().to_string()
-    } else {
-        text
-    };
+    // llama-funasr-sensevoice 输出格式示例:
+    //   哭什么哭啊 [sensevoice] 1 vad segments [sensevoice] done 0.52s
+    //   我有什么好哭的？ [sensevoice] 1 vad segments [sensevoice] done 0.44s
+    //
+    // 策略: 先按 [sensevoice] 日志标记分割，提取每个段落中非日志的实际文本
+    let final_text = extract_sensevoice_text(&stdout, &stderr);
 
     Ok(GgufAsrResult {
         text: final_text,
