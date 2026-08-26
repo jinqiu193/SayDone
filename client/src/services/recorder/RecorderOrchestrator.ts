@@ -494,26 +494,25 @@ export class RecorderOrchestrator {
     this.ctx.timedOutProcessingContext = null
 
     const targetCapture = captureActiveInsertionTarget(undefined, { preserveExistingOnFailure: true })
-    let activeAppContext: ActiveAppContext | null = null
-    try {
-      activeAppContext = await bridge.getActiveAppContext()
-    } catch {
-      activeAppContext = null
-    }
-    this.ctx.currentActiveAppContext = activeAppContext
 
-    try {
-      this.ctx.cachedProbeResult = await this.pasteService.getProbeResult()
+    this.overlayService.clearFallbackHideTimer()
+    this.overlayService.showWaiting()
+
+    const [activeAppContext, probeResult] = await Promise.all([
+      bridge.getActiveAppContext().catch(() => null),
+      this.pasteService.getProbeResult().catch(() => null),
+    ])
+    this.ctx.currentActiveAppContext = activeAppContext
+    this.ctx.cachedProbeResult = probeResult
+    if (probeResult) {
       addRuntimeEvent('info', 'recorder', '录音开始时 probe 已缓存', {
-        probeId: this.ctx.cachedProbeResult.probeId,
-        hwnd: this.ctx.cachedProbeResult.hwnd,
-        focusHwnd: this.ctx.cachedProbeResult.focusHwnd,
-        editable: this.ctx.cachedProbeResult.editable,
-        process: this.ctx.cachedProbeResult.process,
-        verdict: this.ctx.cachedProbeResult.verdict,
+        probeId: probeResult.probeId,
+        hwnd: probeResult.hwnd,
+        focusHwnd: probeResult.focusHwnd,
+        editable: probeResult.editable,
+        process: probeResult.process,
+        verdict: probeResult.verdict,
       })
-    } catch {
-      this.ctx.cachedProbeResult = null
     }
 
     if (this.ctx.isAIChatMode) {
@@ -575,9 +574,6 @@ export class RecorderOrchestrator {
         summary: this.ctx.currentPromptResolution.summary,
       },
     })
-
-    this.overlayService.clearFallbackHideTimer()
-    this.overlayService.showWaiting()
 
     this.ctx.finalHandledInCurrentRun = false
     this.ctx.recordStartPerf = 0
