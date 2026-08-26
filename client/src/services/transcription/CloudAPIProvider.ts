@@ -7,7 +7,7 @@ import { uint8ArrayToBase64 } from '@/lib/encoding'
 import { stripMarkdown } from '@/lib/stripMarkdown'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { getSetting } from '../store'
+import { getSetting, getSettingsBatch } from '../store'
 import { addRuntimeEvent } from '../debugLog'
 import type {
   TranscriptionProvider,
@@ -39,7 +39,6 @@ export class CloudAPIProvider implements TranscriptionProvider {
   readonly mode: WorkMode = 'cloud_api'
 
   private callbacks: TranscriptionCallbacks = {}
-  private pcmBuffers: ArrayBuffer[] = []
   private sessionActive = false
   private startOpts: StartOptions | undefined
   private ready = false
@@ -52,6 +51,11 @@ export class CloudAPIProvider implements TranscriptionProvider {
   private streamStartTime = 0
   private pendingChunks: ArrayBuffer[] = []
   private flushTimer: ReturnType<typeof setInterval> | null = null
+
+  // 非流式路径的完整音频缓存。
+  // 不能依赖 Orchestrator 传入的 audioChunks（ctx.recordedChunks）——
+  // AudioPipeline 每 5s 增量写盘时会清空 recordedChunks，长录音 stop 后只剩最后几秒 → 丢字。
+  private bufferedChunks: ArrayBuffer[] = []
 
   // 会议纪要流式 partial 推送订阅（Rust 端 emit "asr-partial"）
   private partialUnlisten: (() => void) | null = null
@@ -96,7 +100,6 @@ export class CloudAPIProvider implements TranscriptionProvider {
       addRuntimeEvent('error', 'cloud_api', 'start 失败：Provider 未就绪')
       return false
     }
-    this.pcmBuffers = []
     this.sessionActive = true
     this.startOpts = opts
     this.isDoubaoStream = false
@@ -105,6 +108,7 @@ export class CloudAPIProvider implements TranscriptionProvider {
     this.qwenStreamReady = false
     this.streamStartTime = performance.now()
     this.pendingChunks = []
+    this.bufferedChunks = []
 
     // 异步判断供应商并建连
     void this.tryStartRealtimeStream()
@@ -115,12 +119,12 @@ export class CloudAPIProvider implements TranscriptionProvider {
   sendAudio(buffer: ArrayBuffer): void {
     if (!this.sessionActive) return
 
-    // 始终缓存一份（用于非豆包场景 + 音频保存）
-    this.pcmBuffers.push(buffer.slice(0))
-
     // 豆包/千问流式：攒到 pendingChunks，由定时器批量发送
+    // 其他供应商（buffered）：攒到 bufferedChunks，stop 后整段发送
     if (this.isDoubaoStream || this.isQwenStream) {
       this.pendingChunks.push(buffer.slice(0))
+    } else {
+      this.bufferedChunks.push(buffer.slice(0))
     }
   }
 
@@ -143,8 +147,8 @@ export class CloudAPIProvider implements TranscriptionProvider {
 
   disconnect(): void {
     this.sessionActive = false
-    this.pcmBuffers = []
     this.pendingChunks = []
+    this.bufferedChunks = []
     this.ready = false
     this.isDoubaoStream = false
     this.isQwenStream = false
@@ -167,30 +171,34 @@ export class CloudAPIProvider implements TranscriptionProvider {
 
   private async tryStartRealtimeStream(): Promise<void> {
     try {
-      const asrProvider = await getSetting('cloudAsr.provider', 'doubao') as string
+      const settings = await getSettingsBatch({
+        'cloudAsr.provider': 'doubao',
+        'cloudAsr.apiKey': '',
+        'cloudAsr.appId': '',
+      })
+      const asrProvider = settings['cloudAsr.provider'] as string
 
       if (asrProvider === 'doubao_v2') {
-        // 豆包流式
         this.isDoubaoStream = true
-        const asrApiKey = await getSetting('cloudAsr.apiKey', '') as string
-        const asrAppId = await getSetting('cloudAsr.appId', '') as string
-
         addRuntimeEvent('info', 'cloud_api', '豆包流式：建立连接')
         await invoke('doubao_stream_open', {
-          config: { provider: 'doubao_v2', api_key: asrApiKey, app_id: asrAppId },
+          config: {
+            provider: 'doubao_v2',
+            api_key: settings['cloudAsr.apiKey'] as string,
+            app_id: settings['cloudAsr.appId'] as string,
+          },
           sampleRate: 16000,
           hotwords: this.startOpts?.hotwords ?? [],
         })
         this.doubaoStreamReady = true
         addRuntimeEvent('info', 'cloud_api', '豆包流式：连接就绪')
       } else if (asrProvider === 'qwen' || asrProvider === 'qwen_realtime') {
-        // 千问流式
         this.isQwenStream = true
-        const asrApiKey = await getSetting('cloudAsr.apiKey', '') as string
+        const apiKey = settings['cloudAsr.apiKey'] as string
 
         addRuntimeEvent('info', 'cloud_api', '千问流式：建立连接')
         await invoke('qwen_stream_open', {
-          config: { provider: 'qwen', api_key: asrApiKey, app_id: '' },
+          config: { provider: 'qwen', api_key: apiKey, app_id: '' },
           hotwords: this.startOpts?.hotwords ?? [],
         })
         this.qwenStreamReady = true
@@ -200,7 +208,10 @@ export class CloudAPIProvider implements TranscriptionProvider {
         return
       }
 
-      // 补发建连期间已缓存的音频
+      // 补发建连期间已缓存的音频（此时 isDoubaoStream/isQwenStream 尚未置 true，
+      // 音频都在 bufferedChunks 里）—— 先并入 pendingChunks 再一起发送，避免开头丢字
+      this.pendingChunks.push(...this.bufferedChunks)
+      this.bufferedChunks = []
       await this.flushPendingChunks()
 
       // 启动定时器，每 200ms 批量发送一次
@@ -257,14 +268,21 @@ export class CloudAPIProvider implements TranscriptionProvider {
     const startTime = this.streamStartTime || stopTime
 
     try {
-      const totalBytes = this.pcmBuffers.reduce((sum, buf) => sum + buf.byteLength, 0)
-      if (totalBytes === 0) {
+      // 音频总量判定：
+      // - 流式模式：音频通过 pendingChunks 增量发送，Rust 端已累积 → 只需确认还有内容要发（或已发过）
+      // - buffered 模式：用 Provider 自缓存的完整音频（bufferedChunks）。
+      //   不要用 ctx.recordedChunks（audioChunks）—— 它会被 AudioPipeline 增量写盘清空，
+      //   长录音 stop 后只剩最后几秒，导致 ASR 丢字。
+      const isStreamReady = (this.isDoubaoStream && this.doubaoStreamReady)
+        || (this.isQwenStream && this.qwenStreamReady)
+      const totalBytes = this.bufferedChunks.reduce((sum, buf) => sum + buf.byteLength, 0)
+      if (totalBytes === 0 && !isStreamReady) {
         this.callbacks.onDone?.()
         return null
       }
 
       const durationSec = (totalBytes / 2) / 16000
-      if (durationSec < 0.3) {
+      if (!isStreamReady && durationSec < 0.3) {
         addRuntimeEvent('info', 'cloud_api', '音频过短，跳过处理', { durationSec })
         if (this.isDoubaoStream) invoke('doubao_stream_close').catch(() => {})
         if (this.isQwenStream) invoke('qwen_stream_close').catch(() => {})
@@ -272,8 +290,18 @@ export class CloudAPIProvider implements TranscriptionProvider {
         return null
       }
 
-      // 读取 ASR 配置
-      const asrProvider = await getSetting('cloudAsr.provider', 'doubao') as string
+      // 读取 ASR 配置（批量获取，避免串行 RPC）
+      const settings = await getSettingsBatch({
+        'cloudAsr.provider': 'doubao',
+        'cloudAsr.apiKey': '',
+        'cloudAsr.appId': '',
+        'cloudAsr.omniSystemPrompt': '',
+        'cloudAi.provider': 'openai_compat',
+        'cloudAi.apiUrl': '',
+        'cloudAi.apiKey': '',
+        'cloudAi.model': '',
+      })
+      const asrProvider = settings['cloudAsr.provider'] as string
       const isQwenOmni = isQwenOmniProvider(asrProvider)
       addRuntimeEvent('info', 'cloud_api', `runProcess 实际 ASR 供应商 = ${asrProvider}`, {
         asrProvider,
@@ -287,9 +315,11 @@ export class CloudAPIProvider implements TranscriptionProvider {
       let asrText = ''
       let asrMs = 0
 
-      if ((this.isDoubaoStream && this.doubaoStreamReady) || (this.isQwenStream && this.qwenStreamReady)) {
-        // 流式：停止定时器，flush 剩余数据，发送最后一包
+      if (isStreamReady) {
+        // 流式：停止定时器，flush 剩余数据（含 bufferedChunks 残留），发送最后一包
         if (this.flushTimer) { clearInterval(this.flushTimer); this.flushTimer = null }
+        this.pendingChunks.push(...this.bufferedChunks)
+        this.bufferedChunks = []
         await this.flushPendingChunks()
 
         if (this.isDoubaoStream) {
@@ -317,19 +347,19 @@ export class CloudAPIProvider implements TranscriptionProvider {
         // 非豆包 / 豆包建连失败：录完再发
         const merged = new Uint8Array(totalBytes)
         let offset = 0
-        for (const buf of this.pcmBuffers) {
+        for (const buf of this.bufferedChunks) {
           merged.set(new Uint8Array(buf), offset)
           offset += buf.byteLength
         }
         const audioB64 = uint8ArrayToBase64(merged)
 
-        const asrApiKey = await getSetting('cloudAsr.apiKey', '') as string
-        const asrAppId = await getSetting('cloudAsr.appId', '') as string
+        const asrApiKey = settings['cloudAsr.apiKey'] as string
+        const asrAppId = settings['cloudAsr.appId'] as string
         const qwenOmniModel = resolveQwenOmniModel(asrProvider)
 
         let omniInstructions: string | undefined
         if (isQwenOmni) {
-          const savedPrompt = await getSetting('cloudAsr.omniSystemPrompt', '') as string
+          const savedPrompt = settings['cloudAsr.omniSystemPrompt'] as string
           omniInstructions = savedPrompt || undefined
         }
 
@@ -355,8 +385,6 @@ export class CloudAPIProvider implements TranscriptionProvider {
         asrMs = asrResult.elapsed_ms
       }
 
-      this.pcmBuffers = []
-
       // 发送 ASR 中间结果
       this.callbacks.onASR?.({ text: asrText, asrMs, durationSec })
 
@@ -372,10 +400,10 @@ export class CloudAPIProvider implements TranscriptionProvider {
 
       const disableAi = this.startOpts?.disableAi ?? false
       if (!disableAi && !isQwenOmni) {
-        const aiProvider = await getSetting('cloudAi.provider', 'openai_compat') as string
-        const aiApiUrl = await getSetting('cloudAi.apiUrl', '') as string
-        const aiApiKey = await getSetting('cloudAi.apiKey', '') as string
-        const aiModel = await getSetting('cloudAi.model', '') as string
+        const aiProvider = settings['cloudAi.provider'] as string
+        const aiApiUrl = settings['cloudAi.apiUrl'] as string
+        const aiApiKey = settings['cloudAi.apiKey'] as string
+        const aiModel = settings['cloudAi.model'] as string
 
         if (aiApiUrl && aiApiKey && aiModel) {
           const aiConfig: AiProviderConfig = {
@@ -389,7 +417,6 @@ export class CloudAPIProvider implements TranscriptionProvider {
               ? {
                   process_name: targetAppContext.processName,
                   window_title: targetAppContext.windowTitle || '',
-                  polish_style: this.startOpts?.polishStyle || 'auto',
                 }
               : undefined
 
