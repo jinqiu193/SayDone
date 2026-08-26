@@ -202,6 +202,16 @@ export class OverlayService {
     })
   }
 
+  showInserting() {
+    bridge.updateOverlay({
+      state: 'thinking',
+      elapsedSec: 1,
+      thinkingMessage: '注入文本...',
+      ...this.getCommonPayload(),
+      ...this.getSelectionPayload(),
+    })
+  }
+
   /** Show a warning toast on the overlay (e.g. "单次记录最长300s") — persists until recording ends */
   showTimeoutWarning() {
     this.activeWarning = '单次记录最长300s'

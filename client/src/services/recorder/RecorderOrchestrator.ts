@@ -53,7 +53,7 @@ import {
 } from './types'
 import { OverlayService } from './OverlayService'
 import { PasteService } from './PasteService'
-import { resolvePolishStyle, isModifierPTTSetting as _isModifierPTTSetting, computeProcessingTimeoutMs as _computeProcessingTimeoutMs, isValidTransition, VALID_TRANSITIONS } from './helpers'
+import { isModifierPTTSetting as _isModifierPTTSetting, computeProcessingTimeoutMs as _computeProcessingTimeoutMs, isValidTransition, VALID_TRANSITIONS } from './helpers'
 import { SettingsCache } from './SettingsCache'
 import { AudioPipeline } from './AudioPipeline'
 import { PreviewEngine } from './PreviewEngine'
@@ -451,6 +451,7 @@ export class RecorderOrchestrator {
           void this.resultDispatcher.processAIChatResult(result, context, { allowInsertionWhenIdle: false, source: 'processing' })
           return
         }
+        this.overlayService.showInserting()
         void this.resultDispatcher.processFinalResult(result, context, { allowInsertionWhenIdle: false, source: 'processing' })
       },
 
@@ -539,14 +540,17 @@ export class RecorderOrchestrator {
           })
         } else {
           this.ctx.capturedSelection = null
+          this.overlayService.clearSelectionIndicator()
           addRuntimeEvent('info', 'recorder', 'AI 对话模式：未检测到选区，退回普通 AI 对话')
         }
       } catch (err) {
         this.ctx.capturedSelection = null
+        this.overlayService.clearSelectionIndicator()
         addRuntimeEvent('warn', 'recorder', '选区捕获失败，退回普通 AI 对话', { error: String(err) })
       }
     } else {
       this.ctx.capturedSelection = null
+      this.overlayService.clearSelectionIndicator()
     }
 
     this.ctx.currentPromptResolution = resolvePromptRouting({
@@ -609,7 +613,7 @@ export class RecorderOrchestrator {
           appContext: activeAppContext,
           hotwords: this.settingsCache.cachedHotwords.length > 0 ? this.settingsCache.cachedHotwords : undefined,
           language: this.settingsCache.cachedLanguage || undefined,
-          polishStyle: resolvePolishStyle(activeAppContext),
+          audioChunks: () => this.ctx.recordedChunks,
         }
       : {
           disableAi: !this.settingsCache.cachedAiEnabled || this.ctx.isAIChatMode,
@@ -617,7 +621,7 @@ export class RecorderOrchestrator {
           appContext: activeAppContext,
           hotwords: this.settingsCache.cachedHotwords.length > 0 ? this.settingsCache.cachedHotwords : undefined,
           language: this.settingsCache.cachedLanguage || undefined,
-          polishStyle: 'auto' as const,
+          audioChunks: () => this.ctx.recordedChunks,
         }
 
     let resolveCaptureReady: () => void
