@@ -24,6 +24,10 @@ export class OverlayService {
   private activeWarning = ''
   /** 选区操作指示：非空时浮窗显示"已选 X 字"标签。resetToIdle 时清空。 */
   private activeSelectionIndicator: { chars: number; controlType?: string } | null = null
+  /** 缓存 common/selection payload：只在配置或指示变化时重建，
+   *  避免录音期间每帧（~30fps）重复创建对象。 */
+  private commonPayloadCache: OverlayCommonPayload | null = null
+  private selectionPayloadCache: { selectionChars: number; selectionControlType: string } | null = null
 
   constructor(private readonly getElapsedSec: () => number) {}
 
@@ -32,6 +36,7 @@ export class OverlayService {
     this.readySoundEnabled = Boolean(await getSetting('readySoundEnabled', true))
     this.widthPreset = normalizeWidthPreset(await getSetting('overlayWidth', 'medium'))
     this.position = (await getSetting('overlayPosition', 'bottom')) as 'bottom' | 'top'
+    this.commonPayloadCache = null
   }
 
   private readySoundCtx: AudioContext | null = null
@@ -60,13 +65,16 @@ export class OverlayService {
   }
 
   getCommonPayload(): OverlayCommonPayload {
-    const cfg = OVERLAY_WIDTH_PRESETS[this.widthPreset]
-    return {
-      showDuration: this.showDuration,
-      baseWidth: cfg.windowWidth,
-      barCount: cfg.barCount,
-      position: this.position,
+    if (!this.commonPayloadCache) {
+      const cfg = OVERLAY_WIDTH_PRESETS[this.widthPreset]
+      this.commonPayloadCache = {
+        showDuration: this.showDuration,
+        baseWidth: cfg.windowWidth,
+        barCount: cfg.barCount,
+        position: this.position,
+      }
     }
+    return this.commonPayloadCache
   }
 
   /** 选区指示 payload：透传到浮窗显示"已选 X 字"标签。
@@ -74,13 +82,15 @@ export class OverlayService {
    *    —— 否则不传字段时浮窗 React state 不会更新，旧值会泄漏到下一次录音。
    */
   getSelectionPayload(): { selectionChars: number; selectionControlType: string } {
-    if (!this.activeSelectionIndicator) {
-      return { selectionChars: 0, selectionControlType: '' }
+    if (!this.selectionPayloadCache) {
+      this.selectionPayloadCache = this.activeSelectionIndicator
+        ? {
+            selectionChars: this.activeSelectionIndicator.chars,
+            selectionControlType: this.activeSelectionIndicator.controlType ?? '',
+          }
+        : { selectionChars: 0, selectionControlType: '' }
     }
-    return {
-      selectionChars: this.activeSelectionIndicator.chars,
-      selectionControlType: this.activeSelectionIndicator.controlType ?? '',
-    }
+    return this.selectionPayloadCache
   }
 
   getBarCount(): number {
@@ -135,14 +145,20 @@ export class OverlayService {
     const now = Date.now()
     if (!force && now - this.lastFrameAt < 33) return
     this.lastFrameAt = now
-    bridge.updateOverlay({
+    const elapsed = clampSec(this.getElapsedSec())
+    const payload: Record<string, unknown> = {
       state: 'listening',
       bars,
-      elapsedSec: clampSec(this.getElapsedSec()),
-      ...(this.activeWarning ? { warning: this.activeWarning } : {}),
-      ...this.getCommonPayload(),
-      ...this.getSelectionPayload(),
-    })
+    }
+    // 秒数变化才携带 elapsedSec（与 ticker 共享 lastEmittedElapsed 去重）：
+    // 计时器每秒最多更新一次即可，避免每帧都让浮窗 setElapsedSec。
+    if (elapsed !== this.lastEmittedElapsed) {
+      this.lastEmittedElapsed = elapsed
+      payload.elapsedSec = elapsed
+    }
+    if (this.activeWarning) payload.warning = this.activeWarning
+    Object.assign(payload, this.getCommonPayload(), this.getSelectionPayload())
+    bridge.updateOverlay(payload)
   }
 
   /** 流式 ASR 预览：把局部识别文本推到浮窗，替换波形条显示。
@@ -334,12 +350,14 @@ export class OverlayService {
    *  替代这个指示，state 不变。 */
   showSelectionIndicator(chars: number, controlType?: string) {
     this.activeSelectionIndicator = { chars, controlType }
+    this.selectionPayloadCache = null
     devLog('[overlay]', 'selection indicator set', { chars, controlType })
   }
 
   /** 选区操作：清除指示（resetToIdle / 流程结束时调用） */
   clearSelectionIndicator() {
     this.activeSelectionIndicator = null
+    this.selectionPayloadCache = null
   }
 
   dispose() {

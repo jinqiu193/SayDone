@@ -35,6 +35,21 @@ interface AsrProviderConfig {
 interface AsrResult { text: string; elapsed_ms: number }
 interface AiResult { text: string; elapsed_ms: number }
 
+/**
+ * 非流式云端 ASR 的音频分片参数。
+ *
+ * 背景：长录音若整段一次性 base64 提交给 cloud_transcribe，
+ * PCM 体积会很大（如 3 分钟 ≈ 7.7MB base64），而 Rust 侧千问/豆包
+ * 请求的 HTTP 超时写死为 60s，长音频极易超时或触发上游服务端限制，
+ * 导致"在线接口长录音识别失败"。
+ *
+ * 解决：把 PCM 按该时长分片，逐片调用 cloud_transcribe，再拼接文本。
+ * 每片时长取刷新 60s 超时以下的稳妥值（提交时长 * 处理系数）。
+ */
+const BUFFERED_SEGMENT_SEC = 30
+const SAMPLE_RATE = 16000
+const BUFFERED_SEGMENT_BYTES = BUFFERED_SEGMENT_SEC * SAMPLE_RATE * 2 // 30s * 16000 * 2
+
 export class CloudAPIProvider implements TranscriptionProvider {
   readonly mode: WorkMode = 'cloud_api'
 
@@ -344,15 +359,7 @@ export class CloudAPIProvider implements TranscriptionProvider {
           addRuntimeEvent('info', 'cloud_api', '千问流式：识别完成', { asrMs, textLen: asrText.length })
         }
       } else {
-        // 非豆包 / 豆包建连失败：录完再发
-        const merged = new Uint8Array(totalBytes)
-        let offset = 0
-        for (const buf of this.bufferedChunks) {
-          merged.set(new Uint8Array(buf), offset)
-          offset += buf.byteLength
-        }
-        const audioB64 = uint8ArrayToBase64(merged)
-
+        // 非豆包 / 豆包建连失败：录完再发（按 BUFFERED_SEGMENT_SEC 分片，避免长音频超时）
         const asrApiKey = settings['cloudAsr.apiKey'] as string
         const asrAppId = settings['cloudAsr.appId'] as string
         const qwenOmniModel = resolveQwenOmniModel(asrProvider)
@@ -372,17 +379,44 @@ export class CloudAPIProvider implements TranscriptionProvider {
           }),
         }
 
-        addRuntimeEvent('info', 'cloud_api', '开始 ASR', { provider: asrProvider, durationSec })
-        const asrResult = await invoke<AsrResult>('cloud_transcribe', {
-          request: {
-            audio_b64: audioB64,
-            sample_rate: 16000,
-            asr_config: asrConfig,
-            hotwords: this.startOpts?.hotwords ?? [],
-          },
-        })
-        asrText = asrResult.text.replace(/[\r\n]+/g, ' ')
-        asrMs = asrResult.elapsed_ms
+        // 分段转写：先把完整 PCM 合并为一块，再按步进切成 ≤BUFFERED_SEGMENT_BYTES 的
+        // 子段逐片 cloud_transcribe，最后拼接。避免超大 base64 / 60s HTTP 超时。
+        const merged = new Uint8Array(totalBytes)
+        let mergeOffset = 0
+        for (const buf of this.bufferedChunks) {
+          merged.set(new Uint8Array(buf), mergeOffset)
+          mergeOffset += buf.byteLength
+        }
+
+        const segmentCount = Math.ceil(totalBytes / BUFFERED_SEGMENT_BYTES)
+        const textParts: string[] = []
+        let totalAsrMs = 0
+        for (let segIdx = 0; segIdx < segmentCount; segIdx++) {
+          const segStart = segIdx * BUFFERED_SEGMENT_BYTES
+          const segLen = Math.min(BUFFERED_SEGMENT_BYTES, totalBytes - segStart)
+          if (segLen <= 0) break
+          const audioB64 = uint8ArrayToBase64(merged.subarray(segStart, segStart + segLen))
+          const segDur = segLen / 2 / SAMPLE_RATE
+          addRuntimeEvent('info', 'cloud_api', 'ASR 分片转写', {
+            provider: asrProvider,
+            segIdx,
+            segDurSec: Number(segDur.toFixed(2)),
+            totalSegments: segmentCount,
+          })
+          const asrResult = await invoke<AsrResult>('cloud_transcribe', {
+            request: {
+              audio_b64: audioB64,
+              sample_rate: SAMPLE_RATE,
+              asr_config: asrConfig,
+              hotwords: this.startOpts?.hotwords ?? [],
+            },
+          })
+          const segText = asrResult.text.replace(/[\r\n]+/g, ' ').trim()
+          if (segText) textParts.push(segText)
+          totalAsrMs += asrResult.elapsed_ms
+        }
+        asrText = textParts.join(' ')
+        asrMs = totalAsrMs
       }
 
       // 发送 ASR 中间结果
