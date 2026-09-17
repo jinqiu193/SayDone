@@ -1,9 +1,12 @@
 // 智谱 GLM-ASR 供应商
 // 接口：POST https://open.bigmodel.cn/api/paas/v4/audio/transcriptions
-// multipart/form-data: model=glm-asr-2512, stream=false, file=@audio
+// multipart/form-data: model=glm-asr-2512, stream=true, file=@audio
+// stream=true 时服务端以 SSE（data: {json} 行，data: [DONE] 结束）逐块返回识别内容，
+// 相比 stream=false 一次性返回，首块更快、整体延迟更低。
 // 模型名可在 AsrProviderConfig.extra.model 中覆盖，默认 glm-asr-2512
 
 use super::types::{AsrProviderConfig, AsrResult, TestResult};
+use futures_util::StreamExt;
 use std::time::Instant;
 
 const TRANSCRIBE_URL: &str = "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions";
@@ -84,7 +87,7 @@ pub async fn transcribe(
 
     let form = reqwest::multipart::Form::new()
         .text("model", resolve_model(config))
-        .text("stream", "false")
+        .text("stream", "true")
         .part(
             "file",
             reqwest::multipart::Part::bytes(wav_data)
@@ -105,9 +108,6 @@ pub async fn transcribe(
             format!("HTTP 请求失败: {}", e)
         })?;
 
-    let elapsed_ms = start.elapsed().as_millis() as u64;
-    eprintln!("[asr_zhipu] HTTP {} elapsed_ms={}", resp.status(), elapsed_ms);
-
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
@@ -118,16 +118,81 @@ pub async fn transcribe(
         ));
     }
 
-    let data: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("解析响应失败: {}", e))?;
+    // 解析 SSE 流：每行 `data: {json}`，`data: [DONE]` 表示结束。
+    // 逐块累加识别文本，块格式兼容 text / delta / choices[0].delta.content 三种字段。
+    let mut stream = resp.bytes_stream();
+    let mut text = String::new();
+    let mut buf: Vec<u8> = Vec::new();
+    let mut done = false;
+    while !done {
+        match stream.next().await {
+            Some(Ok(chunk)) => {
+                buf.extend_from_slice(&chunk);
+                // 按行切分（SSE 行以 \n 结束）
+                loop {
+                    match buf.iter().position(|&b| b == b'\n') {
+                        Some(pos) => {
+                            let line: Vec<u8> = buf.drain(..=pos).collect();
+                            let line_str = String::from_utf8_lossy(&line).trim().to_string();
+                            if let Some(payload) = line_str.strip_prefix("data:") {
+                                let payload = payload.trim();
+                                if payload == "[DONE]" {
+                                    done = true;
+                                    break;
+                                }
+                                if let Ok(value) = serde_json::from_str::<serde_json::Value>(payload)
+                                {
+                                    if let Some(t) = value.get("text").and_then(|v| v.as_str()) {
+                                        text.push_str(t);
+                                    } else if let Some(d) = value.get("delta").and_then(|v| v.as_str())
+                                    {
+                                        text.push_str(d);
+                                    } else if let Some(content) = value
+                                        .get("choices")
+                                        .and_then(|c| c.get(0))
+                                        .and_then(|c| c.get("delta"))
+                                        .and_then(|d| d.get("content"))
+                                        .and_then(|v| v.as_str())
+                                    {
+                                        text.push_str(content);
+                                    }
+                                }
+                            }
+                        }
+                        None => break,
+                    }
+                }
+            }
+            Some(Err(e)) => {
+                return Err(format!("读取智谱流式响应失败: {}", e));
+            }
+            None => break,
+        }
+    }
 
-    let text = data
-        .get("text")
-        .and_then(|t| t.as_str())
-        .unwrap_or("")
-        .to_string();
+    let elapsed_ms = start.elapsed().as_millis() as u64;
+
+    // 兜底：若流式解析未得到文本（如服务端按普通 JSON 返回），尝试整体解析
+    if text.is_empty() && !buf.is_empty() {
+        let body_str = String::from_utf8_lossy(&buf).trim().to_string();
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            if let Some(t) = value.get("text").and_then(|v| v.as_str()) {
+                text = t.to_string();
+            } else if let Some(error) = value.get("error") {
+                let msg = error
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("未知错误");
+                return Err(format!("智谱 ASR 服务端错误: {}", truncate(msg, 300)));
+            }
+        }
+    }
+
+    eprintln!(
+        "[asr_zhipu] SSE 流结束 elapsed_ms={} text_len={}",
+        elapsed_ms,
+        text.len()
+    );
 
     Ok(AsrResult { text, elapsed_ms })
 }

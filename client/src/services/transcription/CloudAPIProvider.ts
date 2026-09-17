@@ -380,7 +380,9 @@ export class CloudAPIProvider implements TranscriptionProvider {
         }
 
         // 分段转写：先把完整 PCM 合并为一块，再按步进切成 ≤BUFFERED_SEGMENT_BYTES 的
-        // 子段逐片 cloud_transcribe，最后拼接。避免超大 base64 / 60s HTTP 超时。
+        // 子段，并发调用 cloud_transcribe 后按序拼接。
+        // - 智谱单次限制 ≤30s，必须分片；
+        // - 并发（限制 3 路）避免长录音多片串行导致总耗时线性累加。
         const merged = new Uint8Array(totalBytes)
         let mergeOffset = 0
         for (const buf of this.bufferedChunks) {
@@ -389,12 +391,19 @@ export class CloudAPIProvider implements TranscriptionProvider {
         }
 
         const segmentCount = Math.ceil(totalBytes / BUFFERED_SEGMENT_BYTES)
-        const textParts: string[] = []
+        const CONCURRENCY = 3
+        const textParts: string[] = new Array(segmentCount).fill('')
         let totalAsrMs = 0
-        for (let segIdx = 0; segIdx < segmentCount; segIdx++) {
+
+        const segOf = (segIdx: number) => {
           const segStart = segIdx * BUFFERED_SEGMENT_BYTES
           const segLen = Math.min(BUFFERED_SEGMENT_BYTES, totalBytes - segStart)
-          if (segLen <= 0) break
+          return { segStart, segLen }
+        }
+
+        const transcribeSeg = async (segIdx: number) => {
+          const { segStart, segLen } = segOf(segIdx)
+          if (segLen <= 0) return
           const audioB64 = uint8ArrayToBase64(merged.subarray(segStart, segStart + segLen))
           const segDur = segLen / 2 / SAMPLE_RATE
           addRuntimeEvent('info', 'cloud_api', 'ASR 分片转写', {
@@ -412,10 +421,23 @@ export class CloudAPIProvider implements TranscriptionProvider {
             },
           })
           const segText = asrResult.text.replace(/[\r\n]+/g, ' ').trim()
-          if (segText) textParts.push(segText)
+          textParts[segIdx] = segText
           totalAsrMs += asrResult.elapsed_ms
         }
-        asrText = textParts.join(' ')
+
+        // 并发工作队列：限制同时最多 CONCURRENCY 路
+        let next = 0
+        const workers = Array.from({ length: Math.min(CONCURRENCY, segmentCount) }, async () => {
+          while (next < segmentCount) {
+            const idx = next++
+            await transcribeSeg(idx).catch((err) => {
+              addRuntimeEvent('warn', 'cloud_api', 'ASR 分片失败', { segIdx: idx, error: String(err) })
+            })
+          }
+        })
+        await Promise.all(workers)
+
+        asrText = textParts.filter(Boolean).join(' ')
         asrMs = totalAsrMs
       }
 
