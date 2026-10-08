@@ -14,6 +14,25 @@
 
 ---
 
+## 📸 效果演示
+
+### 工作台
+![工作台](docs/screenshot_workbench.png)
+
+### 语音引擎设置
+![语音引擎](docs/screenshot_voice_engine.png)
+
+### 通用设置
+![通用设置](docs/screenshot_settings.png)
+
+### 文档模板
+![文档模板](docs/screenshot_templates.png)
+
+### 知识库（RAG）
+![知识库](docs/screenshot_knowledge_base.png)
+
+---
+
 ## 📦 下载安装
 
 > 支持 Windows 10/11 x64，开箱即用，无需额外运行时
@@ -196,11 +215,7 @@ client/
 
 ---
 
-## 📸 效果演示
 
-> 🎬 录制中，敬请期待
-
----
 
 ## ❓ FAQ
 
