@@ -160,6 +160,23 @@ export class CloudAPIProvider implements TranscriptionProvider {
     return await this.runProcessSync()
   }
 
+  /** 中止在途处理（"处理中重新开始录音"场景）：
+   *  关闭流式连接、清空缓冲，使旧 run 不再产生新的音频/partial。
+   *  非流式路径中已发出的 cloud_transcribe 无法真正取消，
+   *  但旧 run 的回调会在 Orchestrator 侧按 run 代次被丢弃。 */
+  abort(): void {
+    this.sessionActive = false
+    this.pendingChunks = []
+    this.bufferedChunks = []
+    if (this.flushTimer) { clearInterval(this.flushTimer); this.flushTimer = null }
+    if (this.isDoubaoStream) invoke('doubao_stream_close').catch(() => {})
+    if (this.isQwenStream) invoke('qwen_stream_close').catch(() => {})
+    this.isDoubaoStream = false
+    this.isQwenStream = false
+    this.doubaoStreamReady = false
+    this.qwenStreamReady = false
+  }
+
   disconnect(): void {
     this.sessionActive = false
     this.pendingChunks = []
@@ -281,6 +298,9 @@ export class CloudAPIProvider implements TranscriptionProvider {
   private async runProcessSync(): Promise<string | null> {
     const stopTime = performance.now() // stop 时刻，用于计算流式模式的等待时间
     const startTime = this.streamStartTime || stopTime
+    // 本轮 run 的回调快照：abort 后新录音会 connect 新的回调，
+    // 旧 run 必须只回调自己这一轮的回调对象（由 Orchestrator 按代次判废）。
+    const cb = { ...this.callbacks }
 
     try {
       // 音频总量判定：
@@ -292,7 +312,7 @@ export class CloudAPIProvider implements TranscriptionProvider {
         || (this.isQwenStream && this.qwenStreamReady)
       const totalBytes = this.bufferedChunks.reduce((sum, buf) => sum + buf.byteLength, 0)
       if (totalBytes === 0 && !isStreamReady) {
-        this.callbacks.onDone?.()
+        cb.onDone?.()
         return null
       }
 
@@ -301,7 +321,7 @@ export class CloudAPIProvider implements TranscriptionProvider {
         addRuntimeEvent('info', 'cloud_api', '音频过短，跳过处理', { durationSec })
         if (this.isDoubaoStream) invoke('doubao_stream_close').catch(() => {})
         if (this.isQwenStream) invoke('qwen_stream_close').catch(() => {})
-        this.callbacks.onDone?.()
+        cb.onDone?.()
         return null
       }
 
@@ -442,11 +462,11 @@ export class CloudAPIProvider implements TranscriptionProvider {
       }
 
       // 发送 ASR 中间结果
-      this.callbacks.onASR?.({ text: asrText, asrMs, durationSec })
+      cb.onASR?.({ text: asrText, asrMs, durationSec })
 
       if (!asrText.trim()) {
-        this.callbacks.onFinal?.({ asrText: '', llmText: '', asrMs, llmMs: 0, durationSec })
-        this.callbacks.onDone?.()
+        cb.onFinal?.({ asrText: '', llmText: '', asrMs, llmMs: 0, durationSec })
+        cb.onDone?.()
         return null
       }
 
@@ -502,16 +522,16 @@ export class CloudAPIProvider implements TranscriptionProvider {
 
       const omniModel = isQwenOmni ? resolveQwenOmniModel(asrProvider) : undefined
 
-      this.callbacks.onFinal?.({
+      cb.onFinal?.({
         asrText, llmText, asrMs, llmMs, durationSec,
         ...(isQwenOmni && { asrEngine: 'qwen_omni', asrModel: omniModel }),
       })
-      this.callbacks.onDone?.()
+      cb.onDone?.()
       return llmText
     } catch (err) {
       addRuntimeEvent('error', 'cloud_api', '处理异常', { error: String(err) })
-      this.callbacks.onError?.(String(err))
-      this.callbacks.onDone?.()
+      cb.onError?.(String(err))
+      cb.onDone?.()
       return null
     }
   }

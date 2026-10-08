@@ -56,6 +56,11 @@ export abstract class BufferedProvider implements TranscriptionProvider {
     return true
   }
 
+  abort(): void {
+    this.sessionActive = false
+    this.pcmBuffers = []
+  }
+
   disconnect(): void {
     this.sessionActive = false
     this.pcmBuffers = []

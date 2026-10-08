@@ -58,6 +58,8 @@ export class LocalProvider implements TranscriptionProvider {
   private ready = false
   private sessionStartMs = 0
   private settled = false
+  /** run 代次：start()/abort() 时自增，旧 run 的段结果与 final 一律丢弃 */
+  private runSeq = 0
 
   // VAD 状态（pending 段级 + session 级，详见顶部注释）
   private pendingChunks: ArrayBuffer[] = []
@@ -100,6 +102,7 @@ export class LocalProvider implements TranscriptionProvider {
     }
     this.startOpts = opts
     this.sessionActive = true
+    this.runSeq += 1
     this.sessionStartMs = Date.now()
     this.pendingChunks = []
     this.pendingByteLen = 0
@@ -183,8 +186,21 @@ export class LocalProvider implements TranscriptionProvider {
     return true
   }
 
+  /** 中止在途处理（"处理中重新开始录音"场景）：
+   *  自增 run 代次后，旧 run 尚未完成的段结果与 onFinal 全部丢弃，
+   *  避免上一次录音的文字混入新一轮。 */
+  abort(): void {
+    this.runSeq += 1
+    this.sessionActive = false
+    this.settled = false
+    this.queue = []
+    this.clearPending()
+    this.seenPartialTexts = []
+  }
+
   disconnect(): void {
     this.sessionActive = false
+    this.runSeq += 1
     this.clearPending()
     this.queue = []
     this.inflightCount = 0
@@ -223,11 +239,15 @@ export class LocalProvider implements TranscriptionProvider {
 
   /** 启动队列里所有段（fire-and-forget）；多次调用安全（同段不会重复） */
   private launchAllSegments(): void {
+    const seq = this.runSeq
     while (this.queue.length > 0) {
       const seg = this.queue.shift()!
       this.inflightCount += 1
       this.transcribe(seg.audioB64)
         .then((r) => {
+          // 本轮已被中止（用户在处理中重新录音）：丢弃旧段结果，
+          // 既不写入 seenPartialTexts 也不推 partial
+          if (seq !== this.runSeq) return
           const text = (r.text || '').trim()
           if (text) {
             this.seenPartialTexts.push(text)
@@ -276,10 +296,20 @@ export class LocalProvider implements TranscriptionProvider {
   private static readonly INFLIGHT_FINAL_TIMEOUT_MS = 60_000
 
   private async waitInflightThenFinalize(): Promise<void> {
+    const seq = this.runSeq
     await Promise.race([
       this.waitForInflight(),
       new Promise<void>((r) => setTimeout(r, LocalProvider.INFLIGHT_FINAL_TIMEOUT_MS)),
     ])
+
+    // 本轮已被中止（用户在处理中重新录音）：不再推 final，
+    // 否则上一次录音的文字会被当作本轮结果注入
+    if (seq !== this.runSeq) {
+      addRuntimeEvent('info', 'local', '本轮已中止，丢弃旧 run 的 final', {
+        droppedChars: this.seenPartialTexts.join('').length,
+      })
+      return
+    }
 
     const fullText = this.seenPartialTexts
       .map((t) => t.replace(/[\r\n]+/g, ' '))

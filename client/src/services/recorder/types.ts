@@ -70,6 +70,8 @@ export interface RecorderContext {
   audioFlushTimerId: ReturnType<typeof setInterval> | null
   /** Set when final result has been consumed (prevents duplicate handling) */
   finalHandledInCurrentRun: boolean
+  /** 录音轮次代次：每次 startRecording 自增，用于判废被中止轮次的 provider 回调 */
+  runGeneration: number
   /** Text insertion still in flight, prevents premature idle transition */
   textInsertionInFlight: boolean
   /** Set when startRecording is awaiting capture ready */
@@ -132,6 +134,7 @@ export const INITIAL_CONTEXT: RecorderContext = {
   handsFreeAutoStopId: null,
   audioFlushTimerId: null,
   finalHandledInCurrentRun: false,
+  runGeneration: 0,
   textInsertionInFlight: false,
   captureReadyPromise: null,
   recordStartPerf: 0,

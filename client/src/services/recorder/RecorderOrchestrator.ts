@@ -46,7 +46,6 @@ import {
   LATE_FINAL_GRACE_MS,
   START_CAPTURE_WAIT_MS,
   SELECTION_MAX_LENGTH,
-  SHORT_AUDIO_DISCARD_SEC,
   SHORT_AUDIO_SILENCE_RATIO,
   HANDS_FREE_WARN_DELAY_MS,
   HANDS_FREE_AUTO_STOP_MS,
@@ -171,7 +170,7 @@ export class RecorderOrchestrator {
         })
         return
       }
-      if (this.ctx.state === 'idle') {
+      if (this.ctx.state === 'idle' || this.ctx.state === 'processing') {
         addRuntimeEvent('info', 'ptt', 'event:down accepted -> startRecording', this.getPTTEventContext(payload))
         void this.startRecording()
         return
@@ -250,10 +249,9 @@ export class RecorderOrchestrator {
         })
         return
       }
-      if (this.ctx.state === 'idle') {
+      if (this.ctx.state === 'idle' || this.ctx.state === 'processing') {
         addRuntimeEvent('info', 'ai-chat', 'event:down accepted -> startRecording (AI Chat)', this.getPTTEventContext(payload))
-        this.ctx.isAIChatMode = true
-        void this.startRecording()
+        void this.startRecording({ aiChat: true })
         return
       }
       addRuntimeEvent('info', 'ai-chat', 'event:down ignored', {
@@ -393,17 +391,23 @@ export class RecorderOrchestrator {
 
   // ─── Provider callbacks ───
 
-  private buildProviderCallbacks(): TranscriptionCallbacks {
+  private buildProviderCallbacks(runGen = this.ctx.runGeneration): TranscriptionCallbacks {
+    // 被判废的轮次（处理中被新录音终止）其回调一律丢弃，
+    // 避免上一次录音的 ASR/final/错误混入新一轮。
+    const isStale = () => runGen !== this.ctx.runGeneration
     return {
       onPartial: (text, isFinal) => {
+        if (isStale()) return
         this.previewEngine.onProviderPartial(text, isFinal)
       },
       onASR: (_result) => {
         // 见 buildProviderCallbacks.onASR 旧注释：故意留空，等 onFinal
+        if (isStale()) return
         if (this.ctx.state !== 'processing') return
         if (this.ctx.finalHandledInCurrentRun) return
       },
       onFinal: (result) => {
+        if (isStale()) return
         if (this.ctx.state !== 'processing') {
           const lateContext = this.consumeTimedOutProcessingContext()
           if (!lateContext) return
@@ -456,6 +460,7 @@ export class RecorderOrchestrator {
       },
 
       onDone: () => {
+        if (isStale()) return
         if (this.ctx.state !== 'processing') return
         if (this.ctx.finalHandledInCurrentRun) return
         if (this.ctx.textInsertionInFlight) return
@@ -463,6 +468,7 @@ export class RecorderOrchestrator {
       },
 
       onError: (msg) => {
+        if (isStale()) return
         if (this.ctx.state === 'recording') {
           this.overlayService.stopListeningTicker()
           void stopCapture().catch(() => {})
@@ -484,11 +490,39 @@ export class RecorderOrchestrator {
 
   // ─── Recording lifecycle ───
 
-  private async startRecording() {
-    if (this.ctx.state !== 'idle' || this.ctx.startRecordingLock) {
-      addRuntimeEvent('info', 'recorder', '开始录音请求已忽略', { state: this.ctx.state, locked: this.ctx.startRecordingLock })
+  /** "处理中再次按下 PTT"：终止上一次仍在进行的处理，让新录音立即开始。
+   *  旧轮次的 provider 回调会因 runGeneration 变化被丢弃（见 buildProviderCallbacks）。 */
+  private cancelProcessingForNewRecording() {
+    addRuntimeEvent('info', 'recorder', '处理中重新触发录音：终止上一次处理', {
+      textInsertionInFlight: this.ctx.textInsertionInFlight,
+    })
+    this.clearProcessingTimeout()
+    // 丢弃"迟到 final 补处理"上下文，避免旧结果被注入新会话
+    this.ctx.timedOutProcessingContext = null
+    this.ctx.finalHandledInCurrentRun = false
+    this.provider.abort()
+    this.overlayService.stopListeningTicker()
+    this.overlayService.resetWarnings()
+    this.transition('idle')
+  }
+
+  private async startRecording(opts?: { aiChat?: boolean }) {
+    if (this.ctx.startRecordingLock) {
+      addRuntimeEvent('info', 'recorder', '开始录音请求已忽略', { state: this.ctx.state, locked: true })
       return
     }
+    if (this.ctx.state === 'processing') {
+      // 上一次录音尚未处理完：直接终止它，开始本次录音
+      this.cancelProcessingForNewRecording()
+    } else if (this.ctx.state !== 'idle') {
+      addRuntimeEvent('info', 'recorder', '开始录音请求已忽略', { state: this.ctx.state, locked: false })
+      return
+    }
+
+    // 本轮代次：旧轮次的 provider 回调据此判废
+    this.ctx.runGeneration += 1
+    // 显式声明本轮模式，避免上一轮（处理中被中止）的残留值影响本轮
+    this.ctx.isAIChatMode = Boolean(opts?.aiChat)
     this.ctx.startRecordingLock = true
     this.ctx.pendingStopWhileStarting = false
     this.ctx.timedOutProcessingContext = null
@@ -745,8 +779,10 @@ export class RecorderOrchestrator {
     const hasSelectionForShortCircuit = !!(this.ctx.capturedSelection && this.ctx.capturedSelection.text.trim())
     const silenceRatio = this.audioPipeline.getSilenceRatio()
     const isPureSilence = silenceRatio >= SHORT_AUDIO_SILENCE_RATIO
-    if (audioDur < SHORT_AUDIO_DISCARD_SEC && isPureSilence && !hasSelectionForShortCircuit) {
-      addRuntimeEvent('info', 'recorder', '录音过短且纯静音且无选区，直接丢弃（防误触）', {
+    // 任意时长：只要纯静音比例高（≥0.98）且无选区就直接丢弃，不发给云端，
+    // 空声音秒弃，避免智谱等云端对静音音频长时间处理导致"正在处理"卡住。
+    if (isPureSilence && !hasSelectionForShortCircuit) {
+      addRuntimeEvent('info', 'recorder', '纯静音且无选区，直接丢弃（防误触）', {
         audioSec: audioDur.toFixed(2),
         silenceRatio: silenceRatio.toFixed(3),
       })
@@ -935,6 +971,7 @@ export class RecorderOrchestrator {
         qwen_omni_turbo: 'qwen-omni-turbo-realtime',
         qwen_omni_plus: 'qwen3.5-omni-plus-realtime',
         zhipu: 'glm-asr-2512',
+        minimax: 'asr-1.0',
       }
       const asrProvider = ASR_MODEL_ID_MAP[asrProviderKey] || asrProviderKey || 'cloud'
       const aiProvider = await getSetting('cloudAi.provider', '') as string

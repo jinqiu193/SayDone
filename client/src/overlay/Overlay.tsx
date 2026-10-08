@@ -7,11 +7,27 @@ type OverlayState = 'waiting' | 'listening' | 'thinking' | 'fallback' | 'error'
 
 const DEFAULT_BAR_COUNT = 24
 
-/** 从主题 --overlay-accent 派生波形条颜色（在 accent hue 上下偏移） */
-function getBarColor(index: number, total: number): string {
-  if (typeof document === 'undefined') return '#ffffff'
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--overlay-accent').trim()
-  if (!accent) return '#ffffff'
+/** 模块级 accent 缓存：避免每帧每根 Bar 都调用 getComputedStyle（同步强制样式重算，
+ *  是浮窗 30fps 渲染路径最重的开销）。主题切换时由 overlay/main.tsx 的 applyTheme 调
+ *  用 invalidateOverlayAccentCache() 清除，下次读取自动重建。 */
+let cachedAccentStr: string | null = null
+
+export function invalidateOverlayAccentCache() {
+  cachedAccentStr = null
+}
+
+function readAccent(): string {
+  if (cachedAccentStr !== null) return cachedAccentStr
+  let accent = ''
+  if (typeof document !== 'undefined') {
+    accent = getComputedStyle(document.documentElement).getPropertyValue('--overlay-accent').trim()
+  }
+  cachedAccentStr = accent || '#ffffff'
+  return cachedAccentStr
+}
+
+/** 从主题 --overlay-accent 派生波形条颜色（在 accent hue 上下偏移）。纯函数，颜色表由组件预计算。 */
+function barColorFromAccent(accent: string, index: number, total: number): string {
   const m = accent.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/)
   if (!m) return '#ffffff'
   const baseHue = Number(m[1])
@@ -24,30 +40,33 @@ function getBarColor(index: number, total: number): string {
 
 /** 计时器颜色 / 思考条颜色：直接用主题 accent */
 function getAccentColor(): string {
-  if (typeof document === 'undefined') return '#ffffff'
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--overlay-accent').trim()
-  if (!accent) return '#ffffff'
-  return `hsl(${accent})`
+  const accent = readAccent()
+  return accent === '#ffffff' ? '#ffffff' : `hsl(${accent})`
 }
 
 interface BarProps {
   index: number
   height: number
-  total: number
+  palette: string[]
 }
 
-const Bar = React.memo(function Bar({ index, height, total }: BarProps) {
-  const color = getBarColor(index, total)
+/** 波形条：颜色来自预计算色板（stable 引用），高度动画改用 transform: scaleY
+ *  避免每帧触发 layout（height 变化 + transition 会引发连续重排）。 */
+const Bar = React.memo(function Bar({ index, height, palette }: BarProps) {
   const displayHeight = Math.min(18, Math.max(3, height))
+  const scaleY = displayHeight / 18
   const opacity = 0.7 + (displayHeight / 18) * 0.3
   return (
     <div
       className="w-[2.5px] rounded-full"
       style={{
-        backgroundColor: color,
-        height: `${displayHeight}px`,
+        backgroundColor: palette[index % palette.length],
+        height: '18px',
+        transform: `scaleY(${scaleY.toFixed(3)})`,
+        transformOrigin: 'center',
         opacity,
-        transition: 'height 50ms ease-out, opacity 50ms ease-out',
+        transition: 'transform 50ms ease-out, opacity 50ms ease-out',
+        willChange: 'transform',
       }}
     />
   )
@@ -98,13 +117,36 @@ export default function Overlay() {
   const thinkingColor = accentColor
   const timerColor = accentColor
 
+  // 波形条色板：仅在 barCount（即宽度预设）变化时重建。保证 barElements 高频重建时
+  // palette 引用稳定，Bar 组件浅比较不会因为颜色数组新引用而白白重渲染。
+  const barPalette = useMemo(() => {
+    const accent = readAccent()
+    return Array.from({ length: barCount }, (_, i) => barColorFromAccent(accent, i, barCount))
+  }, [barCount])
+
+  // rAF 合并波形条更新：服务端 ~30fps 推送，合并到浏览器帧边界渲染，
+  // 避免同一帧内多次 IPC 导致 React 渲染抖动、浪费帧预算。
+  const pendingBarsRef = useRef<number[] | null>(null)
+  const barsRafRef = useRef<number | null>(null)
+
+  const scheduleBars = useCallback((next: number[]) => {
+    pendingBarsRef.current = next
+    if (barsRafRef.current !== null) return
+    barsRafRef.current = requestAnimationFrame(() => {
+      barsRafRef.current = null
+      const bars = pendingBarsRef.current
+      pendingBarsRef.current = null
+      if (bars) setBars(bars)
+    })
+  }, [])
+
   const barElements = useMemo(() => (
     <div className="flex items-center gap-[2px]" style={{ height: '20px' }}>
       {bars.map((height, index) => (
-        <Bar key={index} index={index} height={height} total={bars.length} />
+        <Bar key={index} index={index} height={height} palette={barPalette} />
       ))}
     </div>
-  ), [bars])
+  ), [bars, barPalette])
 
   useEffect(() => {
     bridge.onOverlayState((data: unknown) => {
@@ -116,7 +158,7 @@ export default function Overlay() {
       setState(s)
 
       if (Array.isArray(payload.bars) && payload.bars.length > 0) {
-        setBars(payload.bars as number[])
+        scheduleBars(payload.bars as number[])
       } else if (s !== 'listening') {
         setBars(Array(DEFAULT_BAR_COUNT).fill(3))
       }
@@ -193,6 +235,10 @@ export default function Overlay() {
     })
 
     return () => {
+      if (barsRafRef.current !== null) {
+        cancelAnimationFrame(barsRafRef.current)
+        barsRafRef.current = null
+      }
       if (hideTimerRef.current) {
         clearTimeout(hideTimerRef.current)
         hideTimerRef.current = null

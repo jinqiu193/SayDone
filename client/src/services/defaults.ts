@@ -35,7 +35,7 @@ export const DEFAULTS: Record<string, unknown> = {
   'cloudAi.model': '',
 
   // ── ASR（云 API）──
-  'cloudAsr.provider': 'doubao_v2', // 可选: 'doubao_v2' | 'qwen' | 'qwen_realtime' | 'qwen_omni_35_plus' | 'qwen_omni_35_flash' | 'zhipu'
+  'cloudAsr.provider': 'doubao_v2', // 可选: 'doubao_v2' | 'qwen' | 'qwen_realtime' | 'qwen_omni_35_plus' | 'qwen_omni_35_flash' | 'zhipu' | 'minimax'
   'cloudAsr.apiKey': '',
   'cloudAsr.appId': '', // 豆包需要
   'cloudAsr.omniSystemPrompt': '', // 千问 Omni 模式的 system prompt

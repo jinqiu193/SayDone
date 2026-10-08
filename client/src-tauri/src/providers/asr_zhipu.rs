@@ -142,19 +142,38 @@ pub async fn transcribe(
                                 }
                                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(payload)
                                 {
-                                    if let Some(t) = value.get("text").and_then(|v| v.as_str()) {
+                                    // 智谱流式有两种形态，需区分处理避免"文字重复"：
+                                    // - 增量形态：每块带 delta / choices[0].delta.content
+                                    //   （即将追加的新内容）→ push_str 累积。
+                                    // - 累积形态：每块返回顶层 text（当前已全部识别结果），
+                                    //   若按增量 push_str 会逐块翻倍。取最后一个 chunk 即最终结果，
+                                    //   整段覆盖。
+                                    // 顺序：先尝试真增量字段；若本块没有增量字段再按累积 text 覆盖。
+                                    let delta_append = {
+                                        if let Some(d) = value
+                                            .get("delta")
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            Some(d.to_string())
+                                        } else if let Some(content) = value
+                                            .get("choices")
+                                            .and_then(|c| c.get(0))
+                                            .and_then(|c| c.get("delta"))
+                                            .and_then(|d| d.get("content"))
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            Some(content.to_string())
+                                        } else {
+                                            None
+                                        }
+                                    };
+                                    if let Some(inc) = delta_append {
+                                        text.push_str(&inc);
+                                    } else if let Some(t) =
+                                        value.get("text").and_then(|v| v.as_str())
+                                    {
+                                        text.clear();
                                         text.push_str(t);
-                                    } else if let Some(d) = value.get("delta").and_then(|v| v.as_str())
-                                    {
-                                        text.push_str(d);
-                                    } else if let Some(content) = value
-                                        .get("choices")
-                                        .and_then(|c| c.get(0))
-                                        .and_then(|c| c.get("delta"))
-                                        .and_then(|d| d.get("content"))
-                                        .and_then(|v| v.as_str())
-                                    {
-                                        text.push_str(content);
                                     }
                                 }
                             }

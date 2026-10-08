@@ -743,138 +743,155 @@ unsafe extern "system" fn low_level_keyboard_proc(
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
+    // ── CRITICAL: This callback MUST return within ~200ms or Windows
+    // will silently remove the hook. NO blocking operations allowed.
+    // All logging and emit are offloaded via try_send to a dispatcher thread.
+    //
+    // CRITICAL: Wrap everything in catch_unwind to prevent any panic from crashing the process.
+    // The keyboard hook runs in a shared DLL context; a panic here brings down the entire app.
+
     if n_code >= 0 {
-        let kb = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
-        let vk = kb.vkCode;
-        let msg = w_param.0 as u32;
+        // Use catch_unwind to prevent any panic from crashing the process
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            process_keyboard_event(n_code, w_param, l_param)
+        }));
 
-        // ── CRITICAL: This callback MUST return within ~200ms or Windows
-        // will silently remove the hook. NO blocking operations allowed.
-        // All logging and emit are offloaded via try_send to a dispatcher thread.
-
-        // Ultra-low-level diagnostic: OutputDebugString bypasses all locks
-        if vk == 165 || vk == 163 {
-            extern "system" {
-                fn OutputDebugStringA(lp: *const u8);
-            }
-            let s = format!("[SayDone-hook] vk={} msg=0x{:04X}\0", vk, msg);
-            OutputDebugStringA(s.as_ptr());
-        }
-
-        let mut consumed = false;
-
-        HOOK_STATE.with(|s| {
-            if let Some(state) = s.borrow().as_ref() {
-                let is_ptt_key = state.ptt_vk_codes.contains(&vk);
-                let is_hf_key = !state.hf_vk_codes.is_empty()
-                    && state.hf_vk_codes.contains(&vk)
-                    && !is_ptt_key; // PTT takes priority if same key
-
-                if is_ptt_key {
-                    let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
-                    let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-
-                    // 只吞掉 keydown，keyup 必须放行让系统更新键盘状态
-                    // 否则 Windows 会认为修饰键一直按着
-                    if is_down {
-                        consumed = true;
-                    }
-
-                    if is_down && !state.ptt_key_down.load(Ordering::SeqCst)
-                        && !state.hands_free_active.load(Ordering::SeqCst)
-                    {
-                        state.ptt_key_down.store(true, Ordering::SeqCst);
-                        let gen = state.ptt_generation.fetch_add(1, Ordering::SeqCst) + 1;
-
-                        // Non-blocking send to dispatcher
-                        HOOK_ACTION_TX.with(|tx| {
-                            if let Some(sender) = tx.borrow().as_ref() {
-                                let _ = sender.try_send(HookAction::PttDown { vk, gen });
-                            }
-                        });
-                    }
-
-                    if is_up && state.ptt_key_down.load(Ordering::SeqCst) {
-                        state.ptt_key_down.store(false, Ordering::SeqCst);
-
-                        if !state.hands_free_active.load(Ordering::SeqCst) {
-                            HOOK_ACTION_TX.with(|tx| {
-                                if let Some(sender) = tx.borrow().as_ref() {
-                                    let _ = sender.try_send(HookAction::PttUp { vk });
-                                }
-                            });
-                        }
-                    }
-                }
-
-                // 免提键：keyup 时触发 toggle（避免和 keydown repeat 冲突）
-                if is_hf_key {
-                    let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-                    let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
-                    if is_down {
-                        consumed = true; // 吞掉 keydown 防止系统处理
-                    }
-                    if is_up {
-                        HOOK_ACTION_TX.with(|tx| {
-                            if let Some(sender) = tx.borrow().as_ref() {
-                                let _ = sender.try_send(HookAction::HfToggle { vk });
-                            }
-                        });
-                    }
-                }
-
-                // AI Chat 键：按住录音，松开发送
-                let is_ai_chat_key = !state.ai_chat_vk_codes.is_empty()
-                    && state.ai_chat_vk_codes.contains(&vk)
-                    && !is_ptt_key
-                    && !is_hf_key;
-
-                if is_ai_chat_key {
-                    let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
-                    let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-
-                    if is_down {
-                        consumed = true;
-                    }
-
-                    if is_down && !state.ai_chat_key_down.load(Ordering::SeqCst)
-                        && !state.hands_free_active.load(Ordering::SeqCst)
-                    {
-                        state.ai_chat_key_down.store(true, Ordering::SeqCst);
-                        let gen = state.ai_chat_generation.fetch_add(1, Ordering::SeqCst) + 1;
-
-                        log::info!("[ai-chat] dispatcher: ai_chat_down dispatched vk=0x{:X} gen={}", vk, gen);
-
-                        HOOK_ACTION_TX.with(|tx| {
-                            if let Some(sender) = tx.borrow().as_ref() {
-                                let _ = sender.try_send(HookAction::AiChatPttDown { vk, gen });
-                            }
-                        });
-                    }
-
-                    if is_up && state.ai_chat_key_down.load(Ordering::SeqCst) {
-                        state.ai_chat_key_down.store(false, Ordering::SeqCst);
-
-                        if !state.hands_free_active.load(Ordering::SeqCst) {
-                            log::info!("[ai-chat] dispatcher: ai_chat_up dispatched vk=0x{:X}", vk);
-
-                            HOOK_ACTION_TX.with(|tx| {
-                                if let Some(sender) = tx.borrow().as_ref() {
-                                    let _ = sender.try_send(HookAction::AiChatPttUp { vk });
-                                }
-                            });
-                        }
-                    }
+        match result {
+            Ok(consumed) => {
+                if consumed {
+                    return LRESULT(1);
                 }
             }
-        });
-
-        if consumed {
-            return LRESULT(1);
+            Err(_panic_info) => {
+                // A panic occurred in the hook callback. Log it and continue.
+                // This is better than crashing the entire application.
+                // Don't log here - logging may cause issues in the hook context.
+            }
         }
     }
 
     CallNextHookEx(None, n_code, w_param, l_param)
+}
+
+#[cfg(windows)]
+unsafe fn process_keyboard_event(
+    n_code: i32,
+    w_param: WPARAM,
+    l_param: LPARAM,
+) -> bool {
+    // This function should NEVER panic. If it does, the outer catch_unwind will catch it.
+
+    // Early return if TLS is not initialized yet (hook installed but not started)
+    let state_opt = HOOK_STATE.with(|s| s.borrow().clone());
+    let state = match state_opt {
+        Some(s) => s,
+        None => return false, // State not initialized yet, pass through
+    };
+
+    let kb = match (l_param.0 as *const KBDLLHOOKSTRUCT).as_ref() {
+        Some(kb) => kb,
+        None => return false, // Invalid pointer, pass through
+    };
+
+    let vk = kb.vkCode;
+    let msg = w_param.0 as u32;
+
+    let mut consumed = false;
+
+    let is_ptt_key = state.ptt_vk_codes.contains(&vk);
+    let is_hf_key = !state.hf_vk_codes.is_empty()
+        && state.hf_vk_codes.contains(&vk)
+        && !is_ptt_key;
+
+    if is_ptt_key {
+        let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+        let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+
+        if is_down {
+            consumed = true;
+        }
+
+        if is_down && !state.ptt_key_down.load(Ordering::SeqCst)
+            && !state.hands_free_active.load(Ordering::SeqCst)
+        {
+            state.ptt_key_down.store(true, Ordering::SeqCst);
+            let gen = state.ptt_generation.fetch_add(1, Ordering::SeqCst) + 1;
+
+            HOOK_ACTION_TX.with(|tx| {
+                if let Some(sender) = tx.borrow().as_ref() {
+                    let _ = sender.try_send(HookAction::PttDown { vk, gen });
+                }
+            });
+        }
+
+        if is_up && state.ptt_key_down.load(Ordering::SeqCst) {
+            state.ptt_key_down.store(false, Ordering::SeqCst);
+
+            if !state.hands_free_active.load(Ordering::SeqCst) {
+                HOOK_ACTION_TX.with(|tx| {
+                    if let Some(sender) = tx.borrow().as_ref() {
+                        let _ = sender.try_send(HookAction::PttUp { vk });
+                    }
+                });
+            }
+        }
+    }
+
+    if is_hf_key {
+        let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+        let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+        if is_down {
+            consumed = true;
+        }
+        if is_up {
+            HOOK_ACTION_TX.with(|tx| {
+                if let Some(sender) = tx.borrow().as_ref() {
+                    let _ = sender.try_send(HookAction::HfToggle { vk });
+                }
+            });
+        }
+    }
+
+    // AI Chat key: hold to record, release to send
+    let is_ai_chat_key = !state.ai_chat_vk_codes.is_empty()
+        && state.ai_chat_vk_codes.contains(&vk)
+        && !is_ptt_key
+        && !is_hf_key;
+
+    if is_ai_chat_key {
+        let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+        let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+
+        if is_down {
+            consumed = true;
+        }
+
+        let already_down = state.ai_chat_key_down.load(Ordering::SeqCst);
+        if is_down && !already_down && !state.hands_free_active.load(Ordering::SeqCst) {
+            state.ai_chat_key_down.store(true, Ordering::SeqCst);
+            let gen = state.ai_chat_generation.fetch_add(1, Ordering::SeqCst) + 1;
+
+            HOOK_ACTION_TX.with(|tx| {
+                if let Some(sender) = tx.borrow().as_ref() {
+                    let _ = sender.try_send(HookAction::AiChatPttDown { vk, gen });
+                }
+            });
+        }
+
+        if is_up && state.ai_chat_key_down.load(Ordering::SeqCst) {
+            state.ai_chat_key_down.store(false, Ordering::SeqCst);
+
+            if !state.hands_free_active.load(Ordering::SeqCst) {
+                HOOK_ACTION_TX.with(|tx| {
+                    if let Some(sender) = tx.borrow().as_ref() {
+                        let _ = sender.try_send(HookAction::AiChatPttUp { vk });
+                    }
+                });
+            }
+        }
+    }
+
+    consumed
 }
 
 #[cfg(windows)]
@@ -886,104 +903,133 @@ unsafe extern "system" fn low_level_mouse_proc(
     let msg = w_param.0 as u32;
 
     if n_code >= 0 {
-        // Handle middle button PTT
-        if msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP {
-            let _data = *(l_param.0 as *const MSLLHOOKSTRUCT);
+        // Wrap in catch_unwind to prevent panics from crashing the process
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            process_mouse_event(n_code, w_param, l_param, msg)
+        }));
 
-            MOUSE_HOOK_STATE.with(|s| {
-                if let Some(state) = s.borrow().as_ref() {
-                    if !state.enabled.load(Ordering::SeqCst) {
-                        return;
-                    }
-
-                    if msg == WM_MBUTTONDOWN && !state.key_down.load(Ordering::SeqCst) {
-                        let _gen = state.generation.fetch_add(1, Ordering::SeqCst);
-                        state.key_down.store(true, Ordering::SeqCst);
-                        let event = PTTEvent {
-                            source: "rust_mouse_hook".to_string(),
-                            reason: "mbuttondown".to_string(),
-                            vk: 0x04,
-                            ptt_setting: "MouseMiddleButton".to_string(),
-                            timestamp: chrono::Utc::now().timestamp_millis(),
-                            alt_key: false, ctrl_key: false, shift_key: false,
-                        };
-                        let _ = state.app_handle.emit("ptt-down", &event);
-                    } else if msg == WM_MBUTTONUP && state.key_down.load(Ordering::SeqCst) {
-                        state.key_down.store(false, Ordering::SeqCst);
-                        let event = PTTEvent {
-                            source: "rust_mouse_hook".to_string(),
-                            reason: "mbuttonup".to_string(),
-                            vk: 0x04,
-                            ptt_setting: "MouseMiddleButton".to_string(),
-                            timestamp: chrono::Utc::now().timestamp_millis(),
-                            alt_key: false, ctrl_key: false, shift_key: false,
-                        };
-                        let _ = state.app_handle.emit("ptt-up", &event);
-                    }
+        match result {
+            Ok(consumed) => {
+                if consumed {
+                    return LRESULT(1);
                 }
-            });
-        }
-
-        // Handle mouse wheel for scroll-to-send / scroll-to-delete
-        if msg == WM_MOUSEWHEEL {
-            let data = *(l_param.0 as *const MSLLHOOKSTRUCT);
-            let wheel_delta = ((data.mouseData >> 16) & 0xFFFF) as i16 as i32;
-
-            let mut consume = false;
-
-            MOUSE_HOOK_STATE.with(|s| {
-                if let Some(state) = s.borrow().as_ref() {
-                    let up_send = state.scroll_up_send.load(Ordering::SeqCst);
-                    let down_delete = state.scroll_down_delete.load(Ordering::SeqCst);
-                    if !up_send && !down_delete {
-                        SCROLL_UP_ACCUM.with(|a| a.set(0));
-                        SCROLL_DOWN_ACCUM.with(|a| a.set(0));
-                        return;
-                    }
-
-                    if wheel_delta > 0 && up_send {
-                        let threshold = state.scroll_up_threshold.load(Ordering::SeqCst) as i32;
-                        let acc = SCROLL_UP_ACCUM.with(|a| a.get()) + wheel_delta;
-                        SCROLL_UP_ACCUM.with(|a| a.set(acc));
-
-                        if acc >= 120 * threshold && is_focused_element_editable() {
-                            SCROLL_UP_ACCUM.with(|a| a.set(0));
-                            consume = true;
-                            crate::commands::system::write_log_line(
-                                &format!("[RUST] [scroll] wheel up accum={} threshold={} → Enter", acc, threshold)
-                            );
-                            std::thread::spawn(move || {
-                                std::thread::sleep(std::time::Duration::from_millis(10));
-                                send_key(0x0D);
-                            });
-                        }
-                    } else if wheel_delta < 0 && down_delete {
-                        let threshold = state.scroll_down_threshold.load(Ordering::SeqCst) as i32;
-                        let acc = SCROLL_DOWN_ACCUM.with(|a| a.get()) + (-wheel_delta);
-                        SCROLL_DOWN_ACCUM.with(|a| a.set(acc));
-
-                        if acc >= 120 * threshold && is_focused_element_editable() {
-                            SCROLL_DOWN_ACCUM.with(|a| a.set(0));
-                            consume = true;
-                            crate::commands::system::write_log_line(
-                                &format!("[RUST] [scroll] wheel down accum={} threshold={} → Backspace", acc, threshold)
-                            );
-                            std::thread::spawn(move || {
-                                std::thread::sleep(std::time::Duration::from_millis(10));
-                                send_key(0x08);
-                            });
-                        }
-                    }
-                }
-            });
-
-            if consume {
-                return LRESULT(1);
+            }
+            Err(_panic_info) => {
+                // Don't log here - logging may cause issues in the hook context.
             }
         }
     }
 
     CallNextHookEx(None, n_code, w_param, l_param)
+}
+
+#[cfg(windows)]
+unsafe fn process_mouse_event(
+    n_code: i32,
+    w_param: WPARAM,
+    l_param: LPARAM,
+    msg: u32,
+) -> bool {
+    // Handle middle button PTT
+    if msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP {
+        if let Some(data) = (l_param.0 as *const MSLLHOOKSTRUCT).as_ref() {
+            let _ = data; // suppress unused warning
+        }
+
+        MOUSE_HOOK_STATE.with(|s| {
+            if let Some(state) = s.borrow().as_ref() {
+                if !state.enabled.load(Ordering::SeqCst) {
+                    return;
+                }
+
+                if msg == WM_MBUTTONDOWN && !state.key_down.load(Ordering::SeqCst) {
+                    let _gen = state.generation.fetch_add(1, Ordering::SeqCst);
+                    state.key_down.store(true, Ordering::SeqCst);
+                    let event = PTTEvent {
+                        source: "rust_mouse_hook".to_string(),
+                        reason: "mbuttondown".to_string(),
+                        vk: 0x04,
+                        ptt_setting: "MouseMiddleButton".to_string(),
+                        timestamp: chrono::Utc::now().timestamp_millis(),
+                        alt_key: false, ctrl_key: false, shift_key: false,
+                    };
+                    let _ = state.app_handle.emit("ptt-down", &event);
+                } else if msg == WM_MBUTTONUP && state.key_down.load(Ordering::SeqCst) {
+                    state.key_down.store(false, Ordering::SeqCst);
+                    let event = PTTEvent {
+                        source: "rust_mouse_hook".to_string(),
+                        reason: "mbuttonup".to_string(),
+                        vk: 0x04,
+                        ptt_setting: "MouseMiddleButton".to_string(),
+                        timestamp: chrono::Utc::now().timestamp_millis(),
+                        alt_key: false, ctrl_key: false, shift_key: false,
+                    };
+                    let _ = state.app_handle.emit("ptt-up", &event);
+                }
+            }
+        });
+    }
+
+    // Handle mouse wheel for scroll-to-send / scroll-to-delete
+    if msg == WM_MOUSEWHEEL {
+        let data = match (l_param.0 as *const MSLLHOOKSTRUCT).as_ref() {
+            Some(d) => d,
+            None => return false,
+        };
+        let wheel_delta = ((data.mouseData >> 16) & 0xFFFF) as i16 as i32;
+
+        let mut consume = false;
+
+        MOUSE_HOOK_STATE.with(|s| {
+            if let Some(state) = s.borrow().as_ref() {
+                let up_send = state.scroll_up_send.load(Ordering::SeqCst);
+                let down_delete = state.scroll_down_delete.load(Ordering::SeqCst);
+                if !up_send && !down_delete {
+                    SCROLL_UP_ACCUM.with(|a| a.set(0));
+                    SCROLL_DOWN_ACCUM.with(|a| a.set(0));
+                    return;
+                }
+
+                if wheel_delta > 0 && up_send {
+                    let threshold = state.scroll_up_threshold.load(Ordering::SeqCst) as i32;
+                    let acc = SCROLL_UP_ACCUM.with(|a| a.get()) + wheel_delta;
+                    SCROLL_UP_ACCUM.with(|a| a.set(acc));
+
+                    if acc >= 120 * threshold && is_focused_element_editable() {
+                        SCROLL_UP_ACCUM.with(|a| a.set(0));
+                        consume = true;
+                        crate::commands::system::write_log_line(
+                            &format!("[RUST] [scroll] wheel up accum={} threshold={} → Enter", acc, threshold)
+                        );
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            send_key(0x0D);
+                        });
+                    }
+                } else if wheel_delta < 0 && down_delete {
+                    let threshold = state.scroll_down_threshold.load(Ordering::SeqCst) as i32;
+                    let acc = SCROLL_DOWN_ACCUM.with(|a| a.get()) + (-wheel_delta);
+                    SCROLL_DOWN_ACCUM.with(|a| a.set(acc));
+
+                    if acc >= 120 * threshold && is_focused_element_editable() {
+                        SCROLL_DOWN_ACCUM.with(|a| a.set(0));
+                        consume = true;
+                        crate::commands::system::write_log_line(
+                            &format!("[RUST] [scroll] wheel down accum={} threshold={} → Backspace", acc, threshold)
+                        );
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            send_key(0x08);
+                        });
+                    }
+                }
+            }
+        });
+
+        return consume;
+    }
+
+    false
 }
 
 /// Check if the focused element in the foreground window is editable.

@@ -341,6 +341,7 @@ export function captureSelection() {
     automationId: string
     length: number
     available: boolean
+    uiaPatternAvailable: boolean
   }>('capture_selection')
 }
 

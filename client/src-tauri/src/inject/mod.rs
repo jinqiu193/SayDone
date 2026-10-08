@@ -83,7 +83,6 @@ pub fn inject_replace_selection(
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationTextPattern,
         IUIAutomationTextRange, UIA_TextPatternId,
-        TextPatternRangeEndpoint_Start, TextUnit_Character,
     };
     use windows::Win32::Foundation::HWND;
     use windows::core::Interface;
@@ -155,7 +154,8 @@ pub fn inject_replace_selection(
             };
             if sel_len > 0 {
                 // 把起点往前推 sel_len 字符（"从末尾往前 sel_len 字符 = 选区起点"）
-                unsafe { doc.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -(sel_len as i32)) }
+                // TextPatternRangeEndpoint_Start = 0, TextUnit_Character = 1
+                unsafe { doc.MoveEndpointByUnit(windows::Win32::UI::Accessibility::TextPatternRangeEndpoint(0), windows::Win32::UI::Accessibility::TextUnit(1), -(sel_len as i32)) }
                     .map_err(|e| format!("MoveEndpointByUnit(Start, Backward, sel_len): {}", e))?;
             }
             doc

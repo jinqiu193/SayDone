@@ -24,6 +24,8 @@ export function resolveQwenOmniModel(provider: string): string | undefined {
 const ASR_DISPLAY_MODEL_MAP: Record<string, string> = {
   doubao_v2: 'Doubao-Seed-ASR-2.0',
   qwen: 'qwen3-asr-flash',
+  zhipu: 'glm-asr-2512',
+  minimax: 'asr-1.0',
   ...QWEN_OMNI_MODEL_MAP,
 }
 

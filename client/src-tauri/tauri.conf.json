@@ -34,7 +34,11 @@
       "msi"
     ],
     "resources": [
-      "resources/*"
+      "resources/*",
+      "sherpa-onnx-c-api.dll",
+      "sherpa-onnx-cxx-api.dll",
+      "onnxruntime.dll",
+      "onnxruntime_providers_shared.dll"
     ],
     "icon": [
       "icons/icon.ico",

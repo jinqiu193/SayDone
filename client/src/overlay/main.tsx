@@ -3,7 +3,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import Overlay from './Overlay'
+import Overlay, { invalidateOverlayAccentCache } from './Overlay'
 import { applyTheme } from '../themes'
 import * as bridge from '../services/bridge'
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -33,9 +33,11 @@ async function initOverlayTheme() {
     const savedTheme = await bridge.storeGet(THEME_SETTING_KEY)
     const themeId = typeof savedTheme === 'string' ? savedTheme : DEFAULT_THEME
     applyTheme(themeId)
+    invalidateOverlayAccentCache()
   } catch (error) {
     console.warn('[overlay] Failed to load theme from store, using default:', error)
     applyTheme(DEFAULT_THEME)
+    invalidateOverlayAccentCache()
   }
 }
 
@@ -43,6 +45,7 @@ void initOverlayTheme()
 
 bridge.onThemeChanged((themeId) => {
   applyTheme(themeId)
+  invalidateOverlayAccentCache()
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

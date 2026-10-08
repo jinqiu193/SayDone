@@ -43,17 +43,8 @@ export interface StartOptions {
   source?: 'live' | 'history_reprocess'
   hotwords?: string[]
   language?: string
-  /**
-   * AI 润色风格（场景化）
-   * - auto：由 AppContext 自动推断（推荐）
-   * - casual：聊天口语（微信/QQ/Slack/Discord 等）
-   * - standard：通用书面
-   * - formal：正式书面（邮件/WORD/文档 等）
-   * - code：开发者（保留英文变量名/命令/技术名词）
-   * - email：邮件（敬语/落款/段落规范）
-   * - note：笔记（Notion/Obsidian/Typora 等）
-   */
-  polishStyle?: 'auto' | 'casual' | 'standard' | 'formal' | 'code' | 'email' | 'note'
+  /** Getter for shared audio chunk list — avoids double-buffering PCM data */
+  audioChunks?: () => ArrayBuffer[]
 }
 
 export interface StopOptions {
@@ -86,6 +77,9 @@ export interface TranscriptionProvider {
 
   /** 结束录音，触发处理 */
   stop(opts?: StopOptions): boolean
+
+  /** 中止在途处理：丢弃本次 run 的结果，用于"处理中重新开始录音"场景 */
+  abort(): void
 
   /** 断开连接 / 释放资源 */
   disconnect(): void

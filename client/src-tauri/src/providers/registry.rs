@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use super::types::*;
-use super::{ai_openai_compat, ai_ollama, app_classifier, asr_doubao, asr_qwen, asr_qwen_omni, asr_zhipu, meeting_summarize};
+use super::{ai_openai_compat, ai_ollama, app_classifier, asr_doubao, asr_minimax, asr_qwen, asr_qwen_omni, asr_zhipu, meeting_summarize};
 use crate::rag;
 use crate::storage::Storage;
 use std::time::Instant;
@@ -540,6 +540,7 @@ pub async fn test_asr_connection(config: AsrProviderConfig) -> Result<TestResult
         "qwen" => Ok(asr_qwen::test_connection(&config).await),
         "qwen_omni" => Ok(asr_qwen_omni::test_connection(&config).await),
         "zhipu" => Ok(asr_zhipu::test_connection(&config).await),
+        "minimax" => Ok(asr_minimax::test_connection(&config).await),
         other => Err(format!("未知的 ASR 供应商: {}", other)),
     }
 }
@@ -578,6 +579,15 @@ pub async fn cloud_transcribe(request: CloudTranscribeRequest) -> Result<AsrResu
         }
         "zhipu" => {
             asr_zhipu::transcribe(
+                &request.audio_b64,
+                request.sample_rate,
+                config,
+                &request.hotwords,
+            )
+            .await
+        }
+        "minimax" => {
+            asr_minimax::transcribe(
                 &request.audio_b64,
                 request.sample_rate,
                 config,

@@ -16,6 +16,7 @@ const ASR_PROVIDERS = [
   { value: 'qwen_omni_35_plus', label: '千问 3.5 Omni Plus（qwen3.5-omni-plus，ASR+AI）' },
   { value: 'qwen_omni_35_flash', label: '千问 3.5 Omni Flash（qwen3.5-omni-flash，ASR+AI）' },
   { value: 'zhipu', label: '智谱 GLM-ASR（glm-asr-2512）' },
+  { value: 'minimax', label: 'MiniMax 语音识别（asr-1.0）' },
 ]
 
 interface TestResult {
@@ -74,6 +75,7 @@ const OMNI_PROMPT_PRESETS = [
 function asrKeyGroup(provider: string): string {
   if (provider === 'doubao_v2' || provider === 'doubao') return 'doubao'
   if (provider === 'zhipu') return 'zhipu'
+  if (provider === 'minimax') return 'minimax'
   return 'qwen' // qwen, qwen_omni_flash, qwen_omni_plus 都用百炼 key
 }
 
@@ -94,6 +96,8 @@ function checkAsrKeyFormat(provider: string, key: string): string {
     if (!k.includes('.')) {
       return '智谱 API Key 通常包含 "." 分隔符，请确认格式是否正确'
     }
+  } else if (provider === 'minimax') {
+    // MiniMax API Key：JWT 形式（含 . 分隔符），不做强校验
   } else {
     // 百炼平台 API Key：通常以 sk- 开头
     if (!/^sk-/.test(k)) {
@@ -254,7 +258,7 @@ export default function CloudAPISection() {
               </select>
             </div>
             {/* 豆包：App ID 在 API Key 前面 */}
-            {asrProvider !== 'qwen' && !asrProvider.startsWith('qwen_omni') && (
+            {asrProvider !== 'qwen' && !asrProvider.startsWith('qwen_omni') && asrProvider !== 'minimax' && (
             <div>
               <label className="mb-1 block text-sm text-muted-foreground">App ID</label>
               <input
@@ -285,7 +289,9 @@ export default function CloudAPISection() {
                         ? '输入火山引擎 Access Token'
                         : asrProvider === 'zhipu'
                           ? '输入智谱 API Key'
-                          : '输入百炼平台 API Key'
+                          : asrProvider === 'minimax'
+                            ? '输入 MiniMax API Key'
+                            : '输入百炼平台 API Key'
                     }
                     className={inputClass}
                   />

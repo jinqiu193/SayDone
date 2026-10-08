@@ -11,6 +11,7 @@ pub mod asr_qwen;
 pub mod asr_qwen_omni;
 pub mod asr_qwen_realtime;
 pub mod asr_zhipu;
+pub mod asr_minimax;
 pub mod doubao_protocol;
 pub mod meeting_summarize;
 pub mod prompt_defense;

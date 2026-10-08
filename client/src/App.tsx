@@ -7,7 +7,6 @@ import { initRecorder, cleanup } from './services/recorder'
 import { initTheme } from './stores/theme'
 import { initAiEnabled } from './stores/aiEnabled'
 import { getSetting, setSetting } from './services/store'
-import { AppScenarioProvider } from './features/appScenarios/AppScenarioContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import * as bridge from './services/bridge'
 
@@ -59,42 +58,40 @@ export default function App() {
   }
 
   return (
-    <AppScenarioProvider>
-      <ErrorBoundary name="App">
-      <div className="flex h-screen flex-col">
-      <TitleBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main key={location.pathname} className="custom-scrollbar theme-surface animate-route-fade flex-1 overflow-y-auto p-8">
-          <ErrorBoundary name="RouteContent">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/history" element={<Suspense fallback={<PageFallback />}><History /></Suspense>} />
-              <Route path="/favorites" element={<Navigate to="/history" replace />} />
-              <Route path="/hotwords" element={<Suspense fallback={<PageFallback />}><Dictionary /></Suspense>} />
-              <Route path="/dictionary" element={<Navigate to="/hotwords" replace />} />
-              <Route path="/voice-engine" element={<Suspense fallback={<PageFallback />}><VoiceEnginePage /></Suspense>} />
-              <Route path="/ai-instructions" element={<Suspense fallback={<PageFallback />}><AIInstructionsPage /></Suspense>} />
-              <Route path="/ai-service" element={<Suspense fallback={<PageFallback />}><AIServicePage /></Suspense>} />
-              <Route path="/settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
-              <Route path="/about" element={<Suspense fallback={<PageFallback />}><About /></Suspense>} />
-              <Route path="/meeting" element={<Suspense fallback={<PageFallback />}><Meeting /></Suspense>} />
-              <Route path="/knowledge" element={<Suspense fallback={<PageFallback />}><KnowledgeBase /></Suspense>} />
-              <Route path="/templates" element={<Suspense fallback={<PageFallback />}><Templates /></Suspense>} />
-            </Routes>
-          </ErrorBoundary>
-        </main>
-      </div>
-      {showWelcome && (
-        <Suspense fallback={<PageFallback />}>
-          <WelcomeGuide onComplete={handleWelcomeComplete} />
-        </Suspense>
-      )}
+    <ErrorBoundary name="App">
+    <div className="flex h-screen flex-col">
+    <TitleBar />
+    <div className="flex flex-1 overflow-hidden">
+      <Sidebar />
+      <main key={location.pathname} className="custom-scrollbar theme-surface animate-route-fade flex-1 overflow-y-auto p-8">
+        <ErrorBoundary name="RouteContent">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/history" element={<Suspense fallback={<PageFallback />}><History /></Suspense>} />
+            <Route path="/favorites" element={<Navigate to="/history" replace />} />
+            <Route path="/hotwords" element={<Suspense fallback={<PageFallback />}><Dictionary /></Suspense>} />
+            <Route path="/dictionary" element={<Navigate to="/hotwords" replace />} />
+            <Route path="/voice-engine" element={<Suspense fallback={<PageFallback />}><VoiceEnginePage /></Suspense>} />
+            <Route path="/ai-instructions" element={<Suspense fallback={<PageFallback />}><AIInstructionsPage /></Suspense>} />
+            <Route path="/ai-service" element={<Suspense fallback={<PageFallback />}><AIServicePage /></Suspense>} />
+            <Route path="/settings" element={<Suspense fallback={<PageFallback />}><Settings /></Suspense>} />
+            <Route path="/about" element={<Suspense fallback={<PageFallback />}><About /></Suspense>} />
+            <Route path="/meeting" element={<Suspense fallback={<PageFallback />}><Meeting /></Suspense>} />
+            <Route path="/knowledge" element={<Suspense fallback={<PageFallback />}><KnowledgeBase /></Suspense>} />
+            <Route path="/templates" element={<Suspense fallback={<PageFallback />}><Templates /></Suspense>} />
+          </Routes>
+        </ErrorBoundary>
+      </main>
+    </div>
+    {showWelcome && (
       <Suspense fallback={<PageFallback />}>
-        <UpdateDialog />
+        <WelcomeGuide onComplete={handleWelcomeComplete} />
       </Suspense>
-      </div>
-      </ErrorBoundary>
-    </AppScenarioProvider>
+    )}
+    <Suspense fallback={<PageFallback />}>
+      <UpdateDialog />
+    </Suspense>
+    </div>
+    </ErrorBoundary>
   )
 }
