@@ -5,28 +5,20 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: '版本号 (例如 1.0.0)'
-        required: false
-        type: string
 
 env:
   APP_NAME: SayDone
   NODE_VERSION: '22'
 
 jobs:
-  # ============================================================
-  # macOS 构建 (Apple Silicon + Intel)
-  # ============================================================
   build-macos:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-14   # Apple Silicon (M1/M2/M3)
+          - platform: macos-14
             target: aarch64-apple-darwin
-          - platform: macos-13   # Intel
+          - platform: macos-13
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.platform }}
     steps:
@@ -38,17 +30,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Rust (Apple Silicon)
-        if: matrix.platform == 'macos-14'
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Setup Rust (Intel)
-        if: matrix.platform == 'macos-13'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+          manifest-path: client/src-tauri/Cargo.toml
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -57,9 +43,6 @@ jobs:
 
       - name: Install Rust targets
         run: rustup target add ${{ matrix.target }}
-
-      - name: Install frontend dependencies
-        run: cd client && npm ci
 
       - name: Build Tauri (macOS)
         uses: tauri-apps/tauri-action@v0
@@ -72,9 +55,6 @@ jobs:
           releaseDraft: true
           prerelease: false
 
-  # ============================================================
-  # Windows 构建
-  # ============================================================
   build-windows:
     runs-on: windows-latest
     steps:
@@ -88,14 +68,13 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          manifest-path: client/src-tauri/Cargo.toml
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: client/src-tauri
-
-      - name: Install frontend dependencies
-        run: cd client; npm ci
 
       - name: Build Tauri (Windows)
         uses: tauri-apps/tauri-action@v0
