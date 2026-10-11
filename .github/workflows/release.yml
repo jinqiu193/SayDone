@@ -34,7 +34,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          manifest-path: client/src-tauri/Cargo.toml
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -68,8 +67,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          manifest-path: client/src-tauri/Cargo.toml
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
