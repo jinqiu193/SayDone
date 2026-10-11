@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Save, X, FileText, ToggleLeft, ToggleRight, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Edit2, Save, X, FileText, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Switch } from '@/components/ui/switch'
 import { Page } from '@/components/ui/Page'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { cn } from '@/lib/utils'
@@ -163,16 +164,8 @@ export default function TemplatesPage() {
               共 {templates.filter((t) => t.enabled).length} 个启用的模板 · 当前阈值 {Math.round(threshold * 100)}%
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button
-              onClick={handleToggleEnabled}
-              className={cn(
-                enabled ? 'bg-green-500/10 text-green-600 hover:bg-green-500/20' : 'bg-muted text-muted-foreground'
-              )}
-            >
-              {enabled ? <ToggleRight className="mr-2 h-4 w-4" /> : <ToggleLeft className="mr-2 h-4 w-4" />}
-              {enabled ? '已开启' : '已关闭'}
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Switch checked={enabled} onChange={() => void handleToggleEnabled()} />
             <Button variant="outline" onClick={() => void handleReset()}>
               <RotateCcw className="mr-2 h-4 w-4" />
               重置
@@ -293,16 +286,7 @@ export default function TemplatesPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void handleToggleTemplate(template)}
-                  className={cn(
-                    template.enabled ? 'bg-green-500/10 text-green-600 hover:bg-green-500/20' : 'bg-muted text-muted-foreground'
-                  )}
-                >
-                  {template.enabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
-                </Button>
+                <Switch checked={template.enabled} onChange={() => void handleToggleTemplate(template)} size="sm" />
                 <Button variant="ghost" size="sm" onClick={() => void handleEdit(template)}>
                   <Edit2 className="h-4 w-4" />
                 </Button>

@@ -358,7 +358,7 @@ export default function AIProviderSection() {
                     'font-medium',
                     aiMessage.startsWith('连接失败') || aiMessage.startsWith('测试失败')
                       ? 'text-destructive dark:text-destructive'
-                      : 'text-green-600 dark:text-green-400',
+                      : 'text-success',
                   )}>
                     {aiMessage.startsWith('连接失败') || aiMessage.startsWith('测试失败') ? '✗ ' : '✓ '}
                     {aiMessage}

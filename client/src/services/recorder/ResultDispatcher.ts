@@ -31,6 +31,13 @@ import type { RecorderContext, TimedOutProcessingContext } from './types'
 import type { AudioPipeline } from './AudioPipeline'
 import { buildStatsAppId } from './helpers'
 
+/** 历史记录保存门槛：转写文本 trim 后少于该字数视为无效录音，不写入历史 */
+const MIN_HISTORY_CHARS = 7
+
+function isHistoryWorthy(text: string | undefined | null): boolean {
+  return Boolean(text && text.trim().length >= MIN_HISTORY_CHARS)
+}
+
 export interface ResultDispatcherDeps {
   /** 顶层 audio pipeline（拿到 finalize / hasIncrementalData） */
   audioPipeline: AudioPipeline
@@ -195,30 +202,32 @@ export class ResultDispatcher {
         this.ctx.textInsertionInFlight = false
       })
 
-    // 写历史（非阻塞，音频保存和写入都在后台进行）
-    void (async () => {
-      try {
-        const audioFilePath = await this.saveAudioForHistory(recordId)
-        await addHistory({
-          id: recordId,
-          timestamp: Date.now(),
-          asrText: effectiveText,
-          llmText: aiResponseText,
-          asrMs: result.asrMs,
-          llmMs: aiElapsedMs,
-          durationSec: wallSec,
-          audioDurationSec: audioDur > 0 ? audioDur : undefined,
-          asrDurationSec: result.durationSec > 0 ? result.durationSec : undefined,
-          charCount: aiResponseText.length,
-          isEmpty: false,
-          audioFilePath,
-          ...this.buildHistoryMetadata(context.promptResolution),
-        })
-        void bridge.emit('history-updated')
-      } catch (err) {
-        addRuntimeEvent('warn', 'ai-chat', '写入历史记录失败', { error: String(err) })
-      }
-    })()
+    // 写历史（非阻塞，音频保存和写入都在后台进行；无效/过短录音不保存）
+    if (isHistoryWorthy(effectiveText)) {
+      void (async () => {
+        try {
+          const audioFilePath = await this.saveAudioForHistory(recordId)
+          await addHistory({
+            id: recordId,
+            timestamp: Date.now(),
+            asrText: effectiveText,
+            llmText: aiResponseText,
+            asrMs: result.asrMs,
+            llmMs: aiElapsedMs,
+            durationSec: wallSec,
+            audioDurationSec: audioDur > 0 ? audioDur : undefined,
+            asrDurationSec: result.durationSec > 0 ? result.durationSec : undefined,
+            charCount: aiResponseText.length,
+            isEmpty: false,
+            audioFilePath,
+            ...this.buildHistoryMetadata(context.promptResolution),
+          })
+          void bridge.emit('history-updated')
+        } catch (err) {
+          addRuntimeEvent('warn', 'ai-chat', '写入历史记录失败', { error: String(err) })
+        }
+      })()
+    }
   }
 
   /** 语音转文字路径：去重 / 分段 / 替换 → 注入 */
@@ -258,33 +267,35 @@ export class ResultDispatcher {
       return
     }
 
-    // 保存音频 + 写历史（非阻塞，音频保存是磁盘 IO，不应延迟注入）
-    void (async () => {
-      try {
-        const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-        const audioFilePath = await this.saveAudioForHistory(recordId)
-        const providerMeta = await this.deps.buildProviderMetadata(result)
-        await addHistory({
-          id: recordId,
-          timestamp: Date.now(),
-          asrText: result.asrText,
-          llmText: textToPaste,
-          asrMs: result.asrMs,
-          llmMs: result.llmMs,
-          durationSec: wallSec,
-          audioDurationSec: audioDur > 0 ? audioDur : undefined,
-          asrDurationSec: result.durationSec > 0 ? result.durationSec : undefined,
-          charCount: hasText ? textToPaste.length : 0,
-          isEmpty: !hasText,
-          audioFilePath,
-          ...this.buildHistoryMetadata(promptResolution),
-          ...providerMeta,
-        })
-        void bridge.emit('history-updated')
-      } catch (error) {
-        addRuntimeEvent('warn', 'recorder', '写入历史记录失败', { error: String(error) })
-      }
-    })()
+    // 保存音频 + 写历史（非阻塞，音频保存是磁盘 IO，不应延迟注入；无效/过短录音不保存）
+    if (isHistoryWorthy(textToPaste)) {
+      void (async () => {
+        try {
+          const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+          const audioFilePath = await this.saveAudioForHistory(recordId)
+          const providerMeta = await this.deps.buildProviderMetadata(result)
+          await addHistory({
+            id: recordId,
+            timestamp: Date.now(),
+            asrText: result.asrText,
+            llmText: textToPaste,
+            asrMs: result.asrMs,
+            llmMs: result.llmMs,
+            durationSec: wallSec,
+            audioDurationSec: audioDur > 0 ? audioDur : undefined,
+            asrDurationSec: result.durationSec > 0 ? result.durationSec : undefined,
+            charCount: hasText ? textToPaste.length : 0,
+            isEmpty: !hasText,
+            audioFilePath,
+            ...this.buildHistoryMetadata(promptResolution),
+            ...providerMeta,
+          })
+          void bridge.emit('history-updated')
+        } catch (error) {
+          addRuntimeEvent('warn', 'recorder', '写入历史记录失败', { error: String(error) })
+        }
+      })()
+    }
 
     if (!hasText) {
       if (this.ctx.state === 'processing') this.deps.resetToIdleFn()
@@ -338,6 +349,9 @@ export class ResultDispatcher {
         .finally(() => {
           this.ctx.textInsertionInFlight = false
         })
+
+      // 无效/过短录音不保存历史
+      if (!isHistoryWorthy(userInput)) return
 
       void (async () => {
         const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -414,49 +428,12 @@ ${templateContent}
     }
   }
 
-  /** onError 入口：保存音频兜底 + 写 isEmpty 历史 + reset */
+  /** onError 入口：无效录音不保存历史，仅清理音频缓冲 + reset */
   async onError(msg: string): Promise<void> {
     addRuntimeEvent('error', 'backend', msg)
 
-    const audioDur = this.ctx.audioSentSamples / 16000
-    const wallSec = this.ctx.wallTimeAtStopSec > 0 ? this.ctx.wallTimeAtStopSec : audioDur
-    if (audioDur >= 0.5 || this.deps.audioPipeline.hasIncrementalData()) {
-      const saveErrorHistory = async () => {
-        const recordId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-        let audioFilePath: string | undefined
-        const saveAudioEnabled = await getSetting('audioRetentionEnabled', true)
-        if (saveAudioEnabled) {
-          try {
-            const finalized = await this.deps.audioPipeline.finalize()
-            if (finalized) audioFilePath = finalized
-            else if (this.ctx.recordedChunks.length > 0) {
-              const savedPath = await saveRecordingAudio(recordId, this.ctx.recordedChunks)
-              if (savedPath) audioFilePath = savedPath
-            }
-          } catch (err) {
-            addRuntimeEvent('warn', 'recorder', '保存音频文件失败（错误恢复）', { error: String(err) })
-          }
-        } else {
-          void this.deps.audioPipeline.cleanupIncomplete()
-        }
-        await addHistory({
-          id: recordId,
-          timestamp: Date.now(),
-          asrText: '',
-          llmText: '',
-          asrMs: 0,
-          llmMs: 0,
-          durationSec: wallSec,
-          audioDurationSec: audioDur > 0 ? audioDur : undefined,
-          charCount: 0,
-          isEmpty: true,
-          audioFilePath,
-          ...this.buildHistoryMetadata(),
-        })
-        void bridge.emit('history-updated')
-      }
-      void saveErrorHistory().catch(() => {})
-    }
+    // 无效录音（识别失败/出错）不写入历史、不落盘音频，直接清理
+    void this.deps.audioPipeline.cleanupIncomplete()
 
     this.deps.resetToIdleFn()
   }

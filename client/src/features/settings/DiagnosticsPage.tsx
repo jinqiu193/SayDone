@@ -38,7 +38,7 @@ const AI_DISPLAY: Record<string, string> = {
 }
 
 function StatusIcon({ status }: { status: HealthStatus }) {
-  if (status === 'ok') return <CheckCircle2 className="h-4 w-4 text-green-500" />
+  if (status === 'ok') return <CheckCircle2 className="h-4 w-4 text-success" />
   if (status === 'error') return <XCircle className="h-4 w-4 text-destructive" />
   return <MinusCircle className="h-4 w-4 text-muted-foreground/50" />
 }

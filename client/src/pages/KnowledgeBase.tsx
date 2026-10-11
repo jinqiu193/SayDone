@@ -188,7 +188,7 @@ export default function KnowledgeBase() {
               <div className="mt-2">
                 <div className="h-1.5 w-64 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full bg-primary transition-all"
+                    className="h-full bg-cta transition-all"
                     style={{ width: `${downloadProgress ?? 0}%` }}
                   />
                 </div>
@@ -263,7 +263,7 @@ export default function KnowledgeBase() {
                 <button
                   type="button"
                   onClick={() => setSortBy('score')}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs transition-colors ${sortBy === 'score' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
+                  className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs transition-colors ${sortBy === 'score' ? 'bg-cta text-cta-foreground' : 'bg-muted hover:bg-muted/80'}`}
                 >
                   <ArrowUpDown className="h-3 w-3" />
                   相关度
@@ -271,7 +271,7 @@ export default function KnowledgeBase() {
                 <button
                   type="button"
                   onClick={() => setSortBy('time')}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs transition-colors ${sortBy === 'time' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
+                  className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs transition-colors ${sortBy === 'time' ? 'bg-cta text-cta-foreground' : 'bg-muted hover:bg-muted/80'}`}
                 >
                   <Clock className="h-3 w-3" />
                   时间

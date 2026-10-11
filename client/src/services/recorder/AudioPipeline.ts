@@ -13,7 +13,7 @@
 import * as bridge from '../bridge'
 import { addRuntimeEvent } from '../debugLog'
 import { uint8ArrayToBase64 } from '@/lib/encoding'
-import { createWaveformBarState, computeBarsFromPCM, resetWaveformBarState, type WaveformBarState } from '../waveform'
+import { createWaveformBarState, computeBarsFromPCM, getLastFrameRms, getLastPeakAmplitude, resetWaveformBarState, type WaveformBarState } from '../waveform'
 import type { OverlayService } from './OverlayService'
 import type { RecorderContext } from './types'
 import {
@@ -95,7 +95,6 @@ export class AudioPipeline {
   /** startCapture 的 onBuffer 回调：累积 chunk + 转发给 provider.sendAudio */
   onAudioBuffer(buffer: ArrayBuffer): void {
     if (this.ctx.audioSentSamples === 0) {
-      // 首次到达：日志
       import('../debugConsole').then(({ devLog }) => {
         devLog('[ptt-diag] 首个 onData buffer', {
           byteLength: buffer.byteLength,
@@ -103,7 +102,9 @@ export class AudioPipeline {
         })
       })
     }
-    this.ctx.recordedChunks.push(buffer.slice(0))
+    // 直接 push，不复制。flush 时的 merge 会读这些 buffer，
+    // 增删改的是 merge 产生的临时 Uint8Array，不影响 recordedChunks。
+    this.ctx.recordedChunks.push(buffer)
   }
 
   /** startCapture 的 onPCMFrame 回调：波形 + RMS + 低音量告警 + 增量统计
@@ -120,17 +121,11 @@ export class AudioPipeline {
     })
     this.overlayService.pushListeningBars(bars)
 
-    // ── 音频统计（合并为一次数组遍历）──
-    let sum = 0
-    let peakAmp = 0
-    for (let i = 0; i < pcmFrame.length; i++) {
-      const sample = pcmFrame[i]
-      sum += sample * sample
-      const amp = sample < 0 ? -sample : sample
-      if (amp > peakAmp) peakAmp = amp
-    }
-    const rms = Math.sqrt(sum / pcmFrame.length) / 32768
-    const peakNorm = peakAmp / 32768
+    // ── 音频统计：复用 computeBarsFromPCM 内部已计算的 frameRms 和 peakAmplitude，
+    //    避免对 PCM 数据二次遍历 ──
+    const rms = getLastFrameRms()
+    const peakNorm = getLastPeakAmplitude()
+
     this.audioStatsTotalFrames++
     this.audioStatsRmsSum += rms
     if (rms > this.audioStatsPeakRms) this.audioStatsPeakRms = rms
@@ -213,11 +208,10 @@ export class AudioPipeline {
       off += c.byteLength
     }
 
-    // 短暂 take + 清空，避免下一定时器期间累积
+    const isFirst = !this.incrementalFirstChunkWritten
     this.ctx.recordedChunks = []
 
     const audioB64 = uint8ArrayToBase64(merged)
-    const isFirst = !this.incrementalFirstChunkWritten
 
     try {
       await bridge.appendPcmToWav(this.incrementalRecordId, audioB64, 16000, isFirst)
@@ -225,9 +219,7 @@ export class AudioPipeline {
       this.incrementalWrittenBytes += totalBytes
       this.lastFlushedSamples = this.ctx.audioSentSamples
     } catch (err) {
-      // 增量失败不阻断主流程；下次定时器重试
-      this.ctx.recordedChunks.unshift(...chunksFromMerged(merged))
-      addRuntimeEvent('warn', 'recorder.audio-flush', '增量 flush IPC 失败，已把缓冲放回', {
+      addRuntimeEvent('warn', 'recorder.audio-flush', '增量 flush IPC 失败', {
         error: String(err),
         bufferBytes: totalBytes,
       })
@@ -270,17 +262,4 @@ export class AudioPipeline {
       } catch { /* ignore */ }
     }
   }
-}
-
-/** 把 Uint8Array 切回 ArrayBuffer 列表（用于 flush 失败时放回 recordedChunks） */
-function chunksFromMerged(merged: Uint8Array): ArrayBuffer[] {
-  const CHUNK = 32768
-  const out: ArrayBuffer[] = []
-  for (let i = 0; i < merged.length; i += CHUNK) {
-    const slice = merged.subarray(i, Math.min(i + CHUNK, merged.length))
-    const copy = new ArrayBuffer(slice.byteLength)
-    new Uint8Array(copy).set(slice)
-    out.push(copy)
-  }
-  return out
 }

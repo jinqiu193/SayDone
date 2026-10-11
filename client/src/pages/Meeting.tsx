@@ -68,9 +68,9 @@ export default function Meeting() {
     void loadMeetings()
   }, [])
 
-  // 状态从 recording → done 时自动保存到 history
+  // 状态从 recording → done 时自动保存到 history（转写不足 7 字的无效会议不保存）
   useEffect(() => {
-    if (runtime.state === 'done' && runtime.fullText && !historyId) {
+    if (runtime.state === 'done' && runtime.fullText && runtime.fullText.trim().length >= 7 && !historyId) {
       const id = `meeting-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const title = generateMeetingTitle(runtime.fullText)
       void getSetting('workMode', 'cloud_api').then((workMode) => {

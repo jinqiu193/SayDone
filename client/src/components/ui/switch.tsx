@@ -35,7 +35,7 @@ export function Switch({ checked, onChange, label, disabled, className, size = '
         className={cn(
           'relative shrink-0 cursor-pointer rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           sm ? 'h-4 w-7' : 'h-6 w-11',
-          checked ? 'bg-primary' : 'bg-muted',
+          checked ? 'bg-cta' : 'bg-muted',
           disabled && 'cursor-not-allowed',
         )}
       >

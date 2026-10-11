@@ -7,7 +7,8 @@
 // 用 inline fixed overlay 代替 Dialog 组件（与 SettingsDialog 风格一致）
 
 import { useState } from 'react'
-import { Database, X } from 'lucide-react'
+import { Database, X, Upload, PenLine, Mic, ClipboardList } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -25,11 +26,11 @@ interface Props {
   onInitModel?: () => void | Promise<void>
 }
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: 'upload',  label: '📄 上传文件' },
-  { id: 'manual',  label: '✏️ 手动输入' },
-  { id: 'history', label: '🎙 从历史' },
-  { id: 'meeting', label: '📋 从会议' },
+const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'upload',  label: '上传文件', icon: Upload },
+  { id: 'manual',  label: '手动输入', icon: PenLine },
+  { id: 'history', label: '从历史',   icon: Mic },
+  { id: 'meeting', label: '从会议',   icon: ClipboardList },
 ]
 
 export default function KBImportDialog({
@@ -132,21 +133,25 @@ export default function KBImportDialog({
 
         {/* Tabs */}
         <div className="flex border-b border-border/40">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => { setTab(t.id); setError(null) }}
-              className={cn(
-                'flex-1 px-4 py-3 text-sm transition-colors',
-                tab === t.id
-                  ? 'border-b-2 border-primary font-medium text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+          {tabs.map((t) => {
+            const TabIcon = t.icon
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setTab(t.id); setError(null) }}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-sm transition-colors',
+                  tab === t.id
+                    ? 'border-b-2 border-cta font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <TabIcon className="h-4 w-4" />
+                {t.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* 模型未就绪告警 — 拦住用户，必须先加载嵌入模型 */}
@@ -220,7 +225,8 @@ export default function KBImportDialog({
 
           {tab === 'history' && (
             <div className="rounded bg-card/40 p-6 text-center text-sm text-muted-foreground">
-              🎙 从历史导入
+              <Mic className="mx-auto mb-2 h-6 w-6" />
+              从历史导入
               <br />
               <span className="mt-2 block text-xs">
                 v1：推荐在「历史」页选好记录后另存到知识库。批量导入开发中。
@@ -230,7 +236,8 @@ export default function KBImportDialog({
 
           {tab === 'meeting' && (
             <div className="rounded bg-card/40 p-6 text-center text-sm text-muted-foreground">
-              📋 从会议导入
+              <ClipboardList className="mx-auto mb-2 h-6 w-6" />
+              从会议导入
               <br />
               <span className="mt-2 block text-xs">
                 v1：可在「会议纪要」页选好总结后另存到知识库。批量导入开发中。

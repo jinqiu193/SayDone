@@ -66,10 +66,10 @@ export default function KnowledgeBaseToggle() {
   const modelLabel = (() => {
     if (!status) return '加载中…'
     switch (status.model_status) {
-      case 'ready': return `✅ ${status.model_name}`
-      case 'downloading': return '⏬ 下载中…'
-      case 'error': return '❌ 加载失败'
-      default: return '⚠️ 未初始化'
+      case 'ready': return status.model_name
+      case 'downloading': return '下载中…'
+      case 'error': return '加载失败'
+      default: return '未初始化'
     }
   })()
 

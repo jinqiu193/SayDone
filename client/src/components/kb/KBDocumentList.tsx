@@ -1,7 +1,8 @@
-// 知识库文档列表：标题 + 来源标签 + 字数 / 块数 / 时间 + 删除按钮
+// 知识库文档列表：来源图标 + 标题 + 字数 / 块数 / 时间 + 删除按钮
 
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Mic, ClipboardList, Upload, PenLine } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { RAGDocument } from '@/services/rag/types'
 import { SOURCE_LABELS } from '@/services/rag/types'
 import { ragDeleteDocument } from '@/services/rag/bridge'
@@ -9,6 +10,14 @@ import { ragDeleteDocument } from '@/services/rag/bridge'
 interface Props {
   docs: RAGDocument[]
   onChanged: () => void
+}
+
+/** 来源 → 统一 lucide 图标 */
+const SOURCE_ICONS: Record<RAGDocument['source'], LucideIcon> = {
+  history: Mic,
+  meeting: ClipboardList,
+  upload:  Upload,
+  manual:  PenLine,
 }
 
 function formatTime(ms: number) {
@@ -60,12 +69,13 @@ export default function KBDocumentList({ docs, onChanged }: Props) {
         <tbody className="divide-y divide-border">
           {docs.map((d) => {
             const sl = SOURCE_LABELS[d.source]
+            const SourceIcon = SOURCE_ICONS[d.source]
             return (
               <tr key={d.id} className="hover:bg-muted/30">
                 <td className="px-4 py-3">
-                  <span title={sl.label} className="inline-flex items-center gap-1 text-base">
-                    <span>{sl.emoji}</span>
-                    <span className="text-xs text-muted-foreground">{sl.label}</span>
+                  <span title={sl} className="inline-flex items-center gap-1.5">
+                    <SourceIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{sl}</span>
                   </span>
                 </td>
                 <td className="px-4 py-3 font-medium">{d.title}</td>
@@ -84,9 +94,9 @@ export default function KBDocumentList({ docs, onChanged }: Props) {
                     disabled={busyId === d.id}
                     onClick={() => void handleDelete(d.id)}
                     aria-label="删除"
-                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                    className="rounded p-1 transition-colors hover:bg-accent disabled:opacity-50"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </button>
                 </td>
               </tr>

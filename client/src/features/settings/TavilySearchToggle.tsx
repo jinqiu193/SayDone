@@ -6,7 +6,7 @@
 //  - 测试搜索按钮（验证当前配置是否有效）
 
 import { useCallback, useEffect, useState } from 'react'
-import { Globe, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Globe, Eye, EyeOff, ExternalLink, XCircle } from 'lucide-react'
 import PageSection from '@/components/ui/PageSection'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/Button'
@@ -231,7 +231,10 @@ export default function TavilySearchToggle() {
           </div>
 
           {testState.kind === 'err' && (
-            <div className="text-xs text-destructive">❌ {testState.message}</div>
+            <div className="flex items-center gap-1.5 text-xs text-destructive">
+              <XCircle className="h-3.5 w-3.5 shrink-0" />
+              {testState.message}
+            </div>
           )}
 
           {testState.kind === 'ok' && (

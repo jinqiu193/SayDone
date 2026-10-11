@@ -2,8 +2,8 @@ import type { ThemeDefinition } from './types'
 
 /**
  * 青瓷 — 釉色温润（浅色主题）
- * 明式家具的简：低饱和青绿 + 米白釉面 + 棕褐黄铜点缀。
- * 不张扬，长时间使用不刺眼；CTA 用黄铜而非大红，保留克制感。
+ * 明式家具的简：低饱和青绿 + 米白釉面 + 深青瓷绿点缀。
+ * 不张扬，长时间使用不刺眼；CTA 与主色同族（深青瓷绿），保持克制感。
  */
 const qingCi: ThemeDefinition = {
   id: 'qing-ci',
@@ -36,9 +36,9 @@ const qingCi: ThemeDefinition = {
     '--ring': '168 32% 38%',
     '--radius': '0.5rem',
 
-    // CTA — 棕褐黄铜（明式家具铜件）
-    '--cta': '32 38% 42%',
-    '--cta-hover': '32 42% 48%',
+    // CTA — 深青瓷绿（与主色同族、加深一档，保持克制感）
+    '--cta': '168 38% 30%',
+    '--cta-hover': '168 42% 24%',
     '--cta-foreground': '165 18% 96%',
 
     // 区域色
@@ -110,7 +110,7 @@ const qingCi: ThemeDefinition = {
     '--gradient-to': '168 16% 92%',
     '--gradient-angle': '150deg',
     '--accent-gradient-from': '168 32% 38%',
-    '--accent-gradient-to': '32 38% 42%',
+    '--accent-gradient-to': '168 38% 30%',
 
     // 玻璃
     '--glass-bg': '165 18% 99% / 0.55',

@@ -1,4 +1,4 @@
-﻿// Shared waveform drawing utility
+// Shared waveform drawing utility
 // Uses time-domain data for even distribution across all bars
 // Implements adaptive gain control (AGC) for consistent visual response
 
@@ -67,6 +67,29 @@ export function resetWaveformBarState(
   state.peakLevel = 0.05
 }
 
+export interface BarsResult {
+  bars: number[]
+  /** 本帧整体 RMS（0~1），供调用方复用避免二次遍历 */
+  frameRms: number
+  /** 本帧峰值振幅（0~1） */
+  peakAmplitude: number
+}
+
+/** computeBarsFromPCM 最近一次调用的 peakAmplitude（0~1），供 AudioPipeline 复用避免二次遍历 */
+let _lastPeakAmplitude = 0
+/** computeBarsFromPCM 最近一次调用的 frameRms（0~1） */
+let _lastFrameRms = 0
+
+/** 获取最近一次 computeBarsFromPCM 调用中计算的 peakAmplitude（0~1） */
+export function getLastPeakAmplitude(): number {
+  return _lastPeakAmplitude
+}
+
+/** 获取最近一次 computeBarsFromPCM 调用中计算的 frameRms（0~1） */
+export function getLastFrameRms(): number {
+  return _lastFrameRms
+}
+
 export function computeBarsFromPCM(
   pcm: Int16Array,
   state: WaveformBarState,
@@ -90,12 +113,18 @@ export function computeBarsFromPCM(
     return [...state.prevHeights]
   }
 
+  // 单次遍历：同时计算 frameSum 和 peakAmplitude
   let frameSum = 0
+  let peakAmp = 0
   for (let i = 0; i < pcm.length; i++) {
     const v = pcm[i] / 32768
     frameSum += v * v
+    const abs = v < 0 ? -v : v
+    if (abs > peakAmp) peakAmp = abs
   }
   const frameRms = Math.sqrt(frameSum / pcm.length)
+  _lastPeakAmplitude = peakAmp
+  _lastFrameRms = frameRms
 
   if (frameRms > state.peakLevel) {
     state.peakLevel += (frameRms - state.peakLevel) * 0.3

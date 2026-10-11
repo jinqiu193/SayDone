@@ -57,12 +57,12 @@ export interface RAGSearchRequest {
   kb_id?: string
 }
 
-/** 来源在 UI 上用 emoji + 文字标签呈现 */
-export const SOURCE_LABELS: Record<RAGSource, { emoji: string; label: string }> = {
-  history: { emoji: '🎙', label: '历史' },
-  meeting: { emoji: '📋', label: '会议' },
-  upload:  { emoji: '📄', label: '上传' },
-  manual:  { emoji: '✏️', label: '手动' },
+/** 来源文字标签（图标由 UI 层统一用 lucide 组件渲染） */
+export const SOURCE_LABELS: Record<RAGSource, string> = {
+  history: '历史',
+  meeting: '会议',
+  upload:  '上传',
+  manual:  '手动',
 }
 
 export interface RAGModelProgressEvent {

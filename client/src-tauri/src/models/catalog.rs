@@ -68,24 +68,5 @@ pub fn get_available_models() -> Vec<ModelInfo> {
             ],
             archive_url: None,
         },
-        ModelInfo {
-            id: "sensevoice-small-gguf-f16".into(),
-            name: "SenseVoice Small GGUF (F16)".into(),
-            description: "470MB · 精度更高 · llama.cpp 运行时 · 内置 VAD".into(),
-            model_type: "sensevoice-gguf".into(),
-            total_size_bytes: 470 * 1024 * 1024 + 2 * 1024 * 1024,
-            languages: langs.clone(),
-            sources: vec![
-                DownloadSource {
-                    source: "ModelScope".into(),
-                    files: vec![
-                        ModelFile { name: "sensevoice-small-f16.gguf".into(), url: ms(ms_gguf_repo, "sensevoice-small-f16.gguf"), size_bytes: 493_000_000, sha256: None },
-                        ModelFile { name: "fsmn-vad.gguf".into(), url: ms(ms_vad_gguf_repo, "fsmn-vad.gguf"), size_bytes: 1_720_064, sha256: None },
-                    ],
-                },
-            ],
-            archive_url: None,
-        },
-
     ]
 }

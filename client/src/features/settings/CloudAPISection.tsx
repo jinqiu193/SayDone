@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open as shellOpen } from '@tauri-apps/plugin-shell'
-import { Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react'
+import { Eye, EyeOff, ExternalLink, AlertTriangle, Lightbulb } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
 import { getSetting, setSetting } from '@/services/store'
@@ -344,8 +344,9 @@ export default function CloudAPISection() {
             )}
             {asrProvider.startsWith('qwen_omni') && (
               <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2">
-                <p className="text-xs text-warning dark:text-warning">
-                  💡 该模型同时具备语音识别和 AI 理解能力，无需再单独配置下方的「AI 校对」。
+                <p className="flex items-start gap-1.5 text-xs text-warning dark:text-warning">
+                  <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  该模型同时具备语音识别和 AI 理解能力，无需再单独配置下方的「AI 校对」。
                 </p>
               </div>
             )}

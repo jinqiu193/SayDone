@@ -35,9 +35,9 @@ const chiTao: ThemeDefinition = {
     '--ring': '22 75% 38%',
     '--radius': '0.75rem',
 
-    // CTA
-    '--cta': '22 80% 42%',
-    '--cta-hover': '22 80% 36%',
+    // CTA — 深绿（与赤陶暖色形成互补，全主题统一）
+    '--cta': '165 45% 30%',
+    '--cta-hover': '165 50% 24%',
     '--cta-foreground': '0 0% 100%',
 
     // 区域色
