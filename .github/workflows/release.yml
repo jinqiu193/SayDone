@@ -13,7 +13,7 @@ on:
 
 env:
   APP_NAME: SayDone
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   # ============================================================
@@ -37,8 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'client/node_modules'
-          cache-dependency-path: 'client/package-lock.json'
 
       - name: Setup Rust (Apple Silicon)
         if: matrix.platform == 'macos-14'
@@ -87,8 +85,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'client/node_modules'
-          cache-dependency-path: 'client/package-lock.json'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
